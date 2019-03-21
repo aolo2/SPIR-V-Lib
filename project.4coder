@@ -1,0 +1,64 @@
+version(1);
+
+project_name = "CRS VLK";
+
+patterns = {
+    "*.h",
+    "*.c"
+};
+
+blacklist_patterns = {
+	"build/*",
+    "data/*",
+	".*",
+};
+
+load_paths = {
+	{ 
+       { {".", .relative = true, .recursive = true } },
+       .os = "linux"
+	},
+	{ 
+       { {".", .relative = true, .recursive = true } },
+       .os = "win"
+	},
+};
+
+command_list = {
+	{
+		.name = "build",
+		.out = "*run*",
+		.footer_panel = false,
+		.save_dirty_files = true,
+		.cursor_at_end = false,
+		.cmd = {
+			{ "make", .os = "linux" },
+			{ "build.bat",  .os = "win" },
+		},
+	},
+	{
+		.name = "run",
+		.out = "*run*",
+		.footer_panel = false,
+		.save_dirty_files = false,
+		.cursor_at_end = true,
+		.cmd = {
+			{ "make run", .os = "linux" },
+            { "build/debug/main", .os = "win" },
+		},
+	},
+	{
+		.name = "debug",
+		.out = "*run*",
+		.footer_panel = false,
+		.save_dirty_files = false,
+		.cursor_at_end = true,
+		.cmd = {
+			{ "make debug",  .os = "linux" },
+		},
+	},
+};
+
+fkey_command[1] = "build";
+fkey_command[2] = "run";
+fkey_command[3] = "debug";
