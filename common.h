@@ -29,3 +29,10 @@ typedef double f64;
 #endif
 
 #define NOTIMPLEMENTED ASSERT(false)
+#define SHOULDNOTHAPPEN NOTIMPLEMENTED
+
+#include "vector.c"
+#include "stack.c"
+#include "queue.c"
+#include "list.c"
+#include "set.c"

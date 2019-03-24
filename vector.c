@@ -1,3 +1,7 @@
+// NOTE: vector behaviour constants
+static const f32 GROWTH_FACTOR = 1.5f;
+static const u32 INITIAL_SIZE = 10;
+
 struct uint_vector  {
     u32 *data;
     u32 cap;
@@ -48,4 +52,18 @@ vector_push(struct uint_vector *v, u32 item)
     }
     
     v->data[v->head++] = item;
+}
+
+static struct uint_vector
+vector_copy(struct uint_vector *v)
+{
+    struct uint_vector v_new = {
+        .cap = v->cap,
+        .head = v->head,
+        .data = malloc(v->cap * sizeof(u32)),
+    };
+    
+    memcpy(v_new.data, v->data, v->head * sizeof(u32));
+    
+    return(v_new);
 }

@@ -1,129 +1,130 @@
-// A: what is a constant operand in opstore??
-// uniform
-// constant - opconstanttrue / opconstantfalse / opconstant / opconstantcomposite / opconstantnull (?)
-
-// need to create two lists for linear search
-// constant res_id's and uniform res_id's
-// check against that list
-
-// Q: what is outdef?
-// need a list of declarations (ids) 
-// AND OTHER RES_ID PRODUCING INSTRUCTIONS!
-//
-// mb just a list of res_id's produced in the cycle body?
-// 
-// inside the cycle to 
-// check against it. not in list -- outdef
-
-// Q: what is indef?
-// check against a list of declarations again. if found one -- check it
-// again. const or outdef -- good, else bad
-
-// what is a declaration???
-
-// produce a 'loop' by starting from OpLoopMerge, getting the merge_block,
-// and running a bfs (why? says so. =) ), not going to the merge_block edges
-// this produces an order of bb indices. 
-// These indices we call a loop.
-
-// also, when performing the bfs, collect all instructions with a res id (from a 
-// subset ofcourse, that would be 
-
-// OpVariable, OpLoad
-// arithmetics OpSNegate, OpFNegate, OpIAdd, OpFAdd, OpISub, OpFSub, OpIMul, OpFMul, OpUDiv, OpSDiv, OpFDiv, OpUMod, OpSRem, OpSMod, OpFRem, OpFMod)
-// TODO: composite extract/construct
-// these are our 'assignments' in the cycle
-// 
-
-#if 0
-
-static bool
-is_in_def(o)
+// NOTE: returns -1 if the operand is certainly invariant, index
+// of result id producer otherwise
+static s32
+invariant_or_locate(struct ir *file, struct lim_data *loop, u32 object_id)
 {
-}
-
-static bool
-mark_block(v)
-{
-    for stmt {
-        for operand {
-            if (is_const(o) || is_out_def(o) || is_in_def(o)) {
-                
-            }
+    // NOTE: is the given operand constant
+    if (search_item_u32(file->constants.data, file->constants.size, object_id) != -1) {
+        return(-1);
+    }
+    
+    // NOTE: is already found to be invariant
+    if (search_item_u32(loop->invariants.data, loop->invariants.size, object_id) != -1) {
+        return(-1);
+    }
+    
+    for (u32 i = 0; i < loop->result_ids.size; ++i) {
+        if (loop->result_ids.data[i] == object_id) {
+            return(i);
         }
     }
-}
-#endif
-
-static inline bool
-is_out_def(struct bfs_result *loop, u32 operand)
-{
-    return(search_item_u32(loop->ids.data, loop->ids.size, operand) == -1);
+    
+    return(-1);
 }
 
-static inline bool
-is_constant(struct uint_vector *constants, u32 operand)
+static bool
+operand_invariant(struct ir *file, struct lim_data *loop, u32 pos)
 {
-    return(search_item_u32(constants->data, constants->size, operand) != -1);
-}
-
-static inline bool
-is_in_def(struct uint_vector *invariants, u32 operand)
-{
-    return(search_item_u32(invariants->data, invariants->size, operand) != -1);
+    u32 opcode = loop->opcodes.data[pos];
+    
+    switch (opcode) {
+        case OpStore: {
+            u32 object_id  = loop->operands.data[2 * pos + 1];
+            s32 object_pos = invariant_or_locate(file, loop, object_id);
+            return(object_pos == -1 ? true : operand_invariant(file, loop, object_pos));
+        } break;
+        
+        case OpLoad: {
+            u32 pointer_id = loop->operands.data[2 * pos + 0];
+            u32 n = loop->result_ids.size;
+            
+            for (s32 i = 0; i < n; ++i) {
+                s32 other_pos = pos - 1 - i;
+                
+                if (other_pos < 0) {
+                    other_pos += n;
+                }
+                
+                if (loop->opcodes.data[other_pos] == OpStore) {
+                    u32 other_store_pointer_id = loop->operands.data[2 * other_pos + 0];
+                    if (other_store_pointer_id == pointer_id) {
+                        return(other_pos > pos ? false : operand_invariant(file, loop, other_pos));
+                    }
+                }
+            }
+            
+            return(true);
+        } break;
+        
+        // NOTE: arithmetic operation
+        default: {
+            u32 operand_1 = loop->operands.data[2 * pos + 0];
+            s32 operand_1_pos = invariant_or_locate(file, loop, operand_1);
+            
+            bool op1_inv = (operand_1_pos == -1 || operand_invariant(file, loop, operand_1_pos));
+            
+            if (!op1_inv) { return(false); }
+            if (loop->operand_count.data[pos] == 1) { return(true); }
+            
+            u32 operand_2 = loop->operands.data[2 * pos + 1];
+            s32 operand_2_pos = invariant_or_locate(file, loop, operand_2);
+            
+            return(operand_2_pos == -1 || operand_invariant(file, loop, operand_2_pos));
+        }
+    }
+    
+    SHOULDNOTHAPPEN;
 }
 
 static void
-optimize_lim(struct bfs_result *loop, struct uint_vector *constants,
-             struct basic_block *blocks, struct instruction *instructions, u32 *words)
+optimize_lim(struct uint_vector *bfs_order, struct ir *file)
 {
-    printf("\n=== loop ===\n");
+    struct lim_data loop = {
+        .invariants = vector_init(),
+        .result_ids = vector_init(),
+        .operand_count = vector_init(),
+        .operands = vector_init(),
+        .opcodes = vector_init()
+    };
     
-    struct uint_vector invariants = vector_init();
-    struct uint_vector stores = vector_init();
-    
-    for (u32 i = 0; i < loop->sorted.size; ++i) {
-        // NOTE: find all OpStores and check them operands
-        struct basic_block *block = blocks + loop->sorted.data[i];
+    // NOTE: prepare needed data
+    for (u32 i = 0; i < bfs_order->size; ++i) {
+        struct basic_block *block = file->blocks + bfs_order->data[i];
         for (u32 j = block->from; j < block->to; ++j) {
-            struct instruction *inst = instructions + j;
-            if (inst->opcode == OpStore) {
-                
-                u32 variable = words[inst->words_from + OPSTORE_POINTER_INDEX];
-                // TODO!!!
-                
-                vector_push(&stores, j);
+            struct instruction *inst = file->instructions + j;
+            if (matters_in_cycle(inst->opcode)) {
+                u32 op_count = extract_operand_count(inst);
+                vector_push(&loop.opcodes, inst->opcode);
+                vector_push(&loop.operand_count, op_count);
+                vector_push(&loop.result_ids, extract_res_id(inst, file->words)); // NOTE: pushes 0 if no res id
+                vector_push(&loop.operands, extract_nth_operand(inst, file->words, 0));
+                vector_push(&loop.operands, op_count == 2 ? extract_nth_operand(inst, file->words, 1) : 0);
             }
         }
     }
     
-    bool changed = true;
+    bool changes = true;
     
-    while (changed) {
-        changed = false;
-        for (u32 i = 0; i < stores.size; ++i) {
-            u32 inst = stores.data[i];
-            u32 operand = words[instructions[inst].words_from + OPSTORE_OBJECT_INDEX];
-            
-            if (is_constant(constants, operand) || is_out_def(loop, operand) || is_in_def(&invariants, operand)) {
-                if (search_item_u32(invariants.data, invariants.size, inst) == -1) {
-                    vector_push(&invariants, inst);
-                    changed = true;
+    while (changes) {
+        changes = false;
+        for (u32 i = 0; i < loop.result_ids.size; ++i) {
+            if (loop.opcodes.data[i] == OpStore) {
+                u32 operand = loop.operands.data[2 * i + 1];
+                if (operand_invariant(file, &loop, i)) {
+                    if (search_item_u32(loop.invariants.data, loop.invariants.size, operand) == -1) {
+                        vector_push(&loop.invariants, operand);
+                        changes = true;
+                    }
                 }
             }
         }
     }
     
-    show_vector_u32(&invariants, "invar");
+    show_vector_u32(&loop.invariants, "invar");
     
-    vector_free(&invariants);
+    vector_free(&loop.invariants);
+    vector_free(&loop.result_ids);
+    vector_free(&loop.operand_count);
+    vector_free(&loop.operands);
+    vector_free(&loop.opcodes);
 }
-
-
-
-// a = b
-// b = a
-
-
-// opstore a, invar
-// 

@@ -13,11 +13,6 @@ struct dfs_result {
     u32 *sorted;
 };
 
-struct bfs_result {
-    struct uint_vector sorted;
-    struct uint_vector ids;
-};
-
 static struct dfs_result
 cfgc_dfs(struct cfgc *graph)
 {
@@ -59,17 +54,14 @@ cfgc_dfs(struct cfgc *graph)
     return(res);
 }
 
-static struct bfs_result
-cfgc_bfs_(struct cfgc *graph, u32 root, s32 terminate, 
-          struct basic_block *blocks, struct instruction *instructions, u32 *words)
+static struct uint_vector 
+cfgc_bfs_(struct cfgc *graph, u32 root, s32 terminate)
 {
     bool *visited = calloc(graph->nver, sizeof(bool));
-    struct bfs_result res = {
-        .sorted    = vector_init(),
-        .ids       = vector_init(),
-    };
     
+    struct uint_vector sorted = vector_init();
     struct int_queue node_queue = queue_init();
+    
     queue_push(&node_queue, root);
     
     while (node_queue.size) {
@@ -83,18 +75,8 @@ cfgc_bfs_(struct cfgc *graph, u32 root, s32 terminate,
         u32 edges_from = graph->edges_from.data[node_index];
         u32 edges_to = graph->edges_from.data[node_index + 1];
         
-        vector_push(&res.sorted, node_index);
+        vector_push(&sorted, node_index);
         visited[node_index] = true;
-        
-        // NOTE: if we want to collect instructions
-        if (blocks != NULL && instructions != NULL) {
-            for (u32 i = blocks[node_index].from; i < blocks[node_index].to; ++i) {
-                if (is_supported_in_cycle(instructions[i].opcode)) {
-                    u32 res_id = extract_res_id(instructions[i], words);
-                    vector_push(&res.ids, res_id);
-                }
-            }
-        }
         
         for (u32 i = edges_from; i < edges_to; ++i) {
             u32 child = graph->edges.data[i];
@@ -107,7 +89,7 @@ cfgc_bfs_(struct cfgc *graph, u32 root, s32 terminate,
     queue_free(&node_queue);
     free(visited);
     
-    return(res);
+    return(sorted);
 }
 
 #if 0
@@ -118,12 +100,10 @@ cfg_bfs(struct cfgc *graph)
 }
 #endif
 
-static struct bfs_result
-cfgc_bfs_restricted(struct cfgc *graph, u32 header, u32 merge, 
-                    struct basic_block *blocks, struct instruction *instuctions, u32 *words)
+static struct uint_vector
+cfgc_bfs_restricted(struct cfgc *graph, u32 header, u32 merge)
 {
-    return(cfgc_bfs_(graph, header, (s32) merge,
-                     blocks, instuctions, words));
+    return(cfgc_bfs_(graph, header, (s32) merge));
 }
 
 static void
@@ -132,12 +112,6 @@ dfs_result_free(struct dfs_result *res)
     free(res->preorder);
     free(res->sorted);
     free(res->parent);
-}
-
-static void
-bfs_result_free(struct bfs_result *res)
-{
-    vector_free(&res->sorted);
 }
 
 static bool

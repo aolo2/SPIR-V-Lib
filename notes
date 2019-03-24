@@ -1,0 +1,191 @@
+// A: what is a constant operand in opstore??
+// uniform
+// constant - opconstanttrue / opconstantfalse / opconstant / opconstantcomposite / opconstantnull (?)
+
+// need to create two lists for linear search
+// constant res_id's and uniform res_id's
+// check against that list
+
+// Q: what is outdef?
+// need a list of declarations (ids) 
+// AND OTHER RES_ID PRODUCING INSTRUCTIONS!
+//
+// mb just a list of res_id's produced in the cycle body?
+// 
+// inside the cycle to 
+// check against it. not in list -- outdef
+
+// Q: what is indef?
+// check against a list of declarations again. if found one -- check it
+// again. const or outdef -- good, else bad
+
+// what is a declaration???
+
+// produce a 'loop' by starting from OpLoopMerge, getting the merge_block,
+// and running a bfs (why? says so. =) ), not going to the merge_block edges
+// this produces an order of bb indices. 
+// These indices we call a loop.
+
+// also, when performing the bfs, collect all instructions with a res id (from a 
+// subset ofcourse, that would be 
+
+// OpVariable, OpLoad
+// arithmetics OpSNegate, OpFNegate, OpIAdd, OpFAdd, OpISub, OpFSub, OpIMul, OpFMul, OpUDiv, OpSDiv, OpFDiv, OpUMod, OpSRem, OpSMod, OpFRem, OpFMod)
+// TODO: composite extract/construct
+// these are our 'assignments' in the cycle
+// 
+
+
+
+// operand of opstore can be a result of:
+// opload -> has one (meaningful) operand itself
+// opconstant... -> is final
+// arithmetics -> has operands itself
+
+// TODO: uniform/in/out! (is just an opvariable with memory access set)
+
+
+// Reverse computation of reaching definitions (of OpStore)
+// 
+
+
+// ==== reaching definition is the RES_ID operand of ALL opstores to this pointer  ===
+// outside of loop - means that no such res_id was produced (by opload, opconstant.., or arithmetics)
+
+// but it is not an Opstore 
+// so we need all operands to be constant or outloop
+// each operand check: is constant, is outloop OR is resID
+
+// c is outloop
+// b = 1
+
+// a = b + c
+// good.
+
+
+// for
+// %22 = OpLoad %int %a
+// %23 = OpIAdd %int %22 %int_1
+// OpStore %a %23
+
+// opStore has one operand
+// check if operand is (a result of) opConstant -- linear_search (TODO: binary search?)
+// if not:
+// check if is a result of OpLoad or Arithmetics inside the cycle
+// need all (opload, arithmetics) statements WITH THEIR RESULT ID's
+//.and operands
+// if not found (our operand in res_id array) --- then outDef =) nice!
+// NOTE: THIS IS GOOD
+
+// IF FOUND 
+// OPLOAD
+// reaching definition is the LAST opstore to this pointer OR the RES_ID of an ARITHMETICS (can not be
+// later in the cycle, can only be above)
+
+// OPLOAD <- OPSTORE
+// so we need sorted opstores (we get them anyways)
+// AND POINTERS TO WHICH THIS OPSTORE WAS MADE (another array with res_ids, use indices)
+// then we do a full circle from (i - 1) to (i + 1)
+// 
+// ^
+// |
+// |
+// a = ...
+// ^
+// |
+// |
+// 
+// check each opstore when (and if) we find an opstore to our variable, then !STOP!
+// check this opstore's operand (in the same way)
+
+// smth like
+// if ( try_add_invariant() )
+// will check if is invariant and add to vector if it is, returning true or false otherwise
+
+// but if we reach ANY OF the original OpStore's AT ANY POINT in the chain - we are NOT INVARIANT!
+// meaning
+// a++
+// last opstore to 'a' was itself. this means that it IS NOT INVARIANT!
+//
+// or 
+//
+// for
+// a = b
+// b++
+// a will find store to b (make it a growing list of stores (indices i guess)), check
+// against all of them on each step
+// b will find (add b to 1) load from b
+// load will find the original store to b
+
+// OPLOAD <- ARITHMETICS
+// and arithmetics (with produced res_ids)
+// check all aritmetics above this opload (need array of all ops, check if is arithmetics and then 
+// look into res_id array)
+// if there is a res_id which matches OpLoad operand -> this is the reaching definition
+// check one or two operands (depends on the instruction)
+
+
+
+// ARITHMETICS
+// reaching definition of the arithmetics are TWO (or one) [LAST statements producing the operands result_ids]
+// check each 
+
+// need something like 'check_operand' that will ... check the operand
+// 
+// is const - NOTE: return
+// if not found in res_ids inside the loop - NOTE: return
+// 
+// we go up and above the starting point and then loop to the end
+// if we find the operation that has this res_id, then we do
+// recursive search of all operands of the operation and && their results
+// can memoize the results too
+
+// this function needs: 
+// constants
+// list of all result_id producing instructions
+// with one or two operands for each of them
+// and a result_id list for all of them
+// <id> of the operand
+// position in the list of producers
+// 
+
+// for {
+//     a++
+// }
+// %1 = opload a
+// %2 = inc %1 
+// opstore %2
+// see and operand of opstore -> operand of inc -> operand of opload
+// operand of opload is a var
+
+// Have a store
+// Store has an operand
+
+// check this operand():
+// if constant - invar
+// if not found in resId's in cycle - invar
+
+// check all stores, find stores to this var (if no stores - invariant, btw)
+// find LAST store TO THIS VAR if the store was on this iteration -> check operand
+// if it was on PREV iteration -- is not invariant!!! =DDD
+
+// if found - can be a result of load or arithmetics
+// check operand of load or both operands of aritmetics
+
+
+
+
+// OpStore has two operands
+// variable to store to and res_id 
+// res_id can be a result of arith or opload
+
+// if it's a result of arith - check both operands
+// if it's a result of opload - we are writing one variable to another
+// check operand of opload
+
+// for {
+//    b++
+//    a = b
+// }
+
+
