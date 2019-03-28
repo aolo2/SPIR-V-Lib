@@ -34,5 +34,4 @@ typedef double f64;
 #include "vector.c"
 #include "stack.c"
 #include "queue.c"
-#include "list.c"
-#include "set.c"
+#include "cfg.c"

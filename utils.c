@@ -18,6 +18,8 @@ get_binary(const char *filename, u32 *size)
     
     *size /= sizeof(u32);
     
+    fclose(file);
+    
     return(buffer);
 }
 

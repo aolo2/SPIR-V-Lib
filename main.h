@@ -1,9 +1,12 @@
 #include "common.h"
 
 // NOTE: SPIR-V file constants
-static const u32 SPIRV_HEADER_WORDS = 4;
+static const u32 SPIRV_HEADER_WORDS = 5;
 static const u32 WORDCOUNT_MASK     = 0xFFFF0000;
 static const u32 OPCODE_MASK        = 0x0000FFFF;
+static const u32 WORD_SIZE          = 4;
+static const u32 OPLABEL_WORD0      = 0x200F8;
+static const u32 OPBRANCH_WORD0     = 0x200F9;
 
 // NOTE: instruction operand offset constants
 static const u32 OPLABEL_RESID_INDEX = 1;
@@ -25,6 +28,8 @@ static const u32 OPLOAD_POINTER_INDEX = 3;
 static const u32 ARITHMETIC_OPS_RESID_INDEX = 2;
 static const u32 ARITHMETIC_OPS_OPERANDS_START_INDEX = 3;
 static const u32 OPSTORE_OPS_OPERANDS_START_INDEX = 1;
+static const u32 OPLABEL_WORDCOUNT = 2;
+static const u32 OPBRANCH_WORDCOUNT = 2;
 
 struct uint_vector;
 struct int_queue;
@@ -64,10 +69,11 @@ static bool matters_in_cycle(u32 opcode);
 static const char *names_opcode(u32 code);
 
 // NOTE: CFG
-static struct dfs_result cfgc_dfs(struct cfgc *graph);
+static struct dfs_result cfgc_dfs_(struct cfgc *graph, u32 root, s32 terminate);
 static struct uint_vector cfgc_bfs_(struct cfgc *graph, u32 root, s32 terminate);
 //static struct bfs_result cfg_bfs(struct cfgc *graph);
 static struct uint_vector cfgc_bfs_restricted(struct cfgc *graph, u32 header, u32 merge);
+static struct uint_vector cfgc_dfs_restricted(struct cfgc *graph, u32 header, u32 merge);
 static void dfs_result_free(struct dfs_result *res);
 static void bfs_result_free(struct bfs_result *res);
 static bool cfgc_preorder_less(u32 *preorder, u32 a, u32 b);
@@ -115,8 +121,11 @@ static bool set_del(struct hashset *set, u32 key);
 static bool set_has(struct hashset *set, void *item);
 
 // NOTE: optimizations
-//static bool operand_invariant(struct ir *file, struct lim_data *loop, u32 operand);
-//static s32 invariant_or_locate(struct ir *file. struct lim_data *loop, u32 object_id);
+static bool dominates(u32 parent, s32 child, s32 *dominators);
+static bool dominates_all_uses(struct ir *file, struct lim_data *loop, u32 pos);
+static s32 invariant_or_locate(struct lim_data *loop, u32 object_id);
+static bool try_add_invariant(struct ir *file, struct lim_data *loop, u32 pos);
+static void code_motion(struct ir *file, struct lim_data *loop, struct uint_vector *motion);
 static void optimize_lim(struct uint_vector *bfs_order, struct ir *file);
 
 // NOTE: this must be 4 byte-aligned, is written to as a pointer
@@ -146,10 +155,16 @@ struct parse_result {
 };
 
 struct ir {
-    struct uint_vector constants;
+    struct spirv_header header;
     struct basic_block *blocks;
     struct instruction *instructions;
+    struct cfgc cfg;
     u32 *words;
+    s32 *dominators;
+    u32 *bb_labels;
+    u32 num_words;
+    u32 num_instructions;
+    u32 num_bb;
 };
 
 struct lim_data {
@@ -158,10 +173,17 @@ struct lim_data {
     struct uint_vector operand_count;
     struct uint_vector operands;
     struct uint_vector opcodes;
+    struct uint_vector blocks;
+    struct uint_vector instructions;
+    bool multiple_exits;
+    u32 entry_block_id;
+    u32 merge_block_id;
+    u32 continue_block_id;
+    u32 merge_block_index;
+    u32 entry_block_index;
 };
 
 #include "names.c"
-#include "cfg.c"
 #include "utils.c"
 #include "spirv.c"
 #include "optimize.c"

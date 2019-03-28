@@ -30,7 +30,7 @@ parse_words(u32 *words, u32 num_words, u32 *num_instructions, u32 *num_bb)
     *num_instructions = 0;
     *num_bb = 0;
     
-    for (u32 i = SPIRV_HEADER_WORDS + 1; i < num_words; ++i) {
+    for (u32 i = SPIRV_HEADER_WORDS; i < num_words; ++i) {
         struct instruction inst = {
             .wordcount = (words[i] & WORDCOUNT_MASK) >> 16,
             .opcode = words[i] & OPCODE_MASK,
@@ -84,11 +84,8 @@ construct_cfg(struct ir *file, u32 *bb_labels, u32 num_instructions, u32 num_bb)
             file->blocks[bb_head++] = bb;
             
             switch (inst->opcode) {
-                case OpReturn: {
-                } break;
-                
+                case OpReturn:
                 case OpReturnValue: {
-                    //u32 value = words[inst.words_from + OPRETURNVALUE_VALUE_INDEX];
                 } break;
                 
                 case OpBranchConditional: {
@@ -269,4 +266,21 @@ matters_in_cycle(u32 opcode)
             return(false);
         }
     }
+}
+
+static void
+dump_ir(struct ir *file, const char *filename)
+{
+    FILE *stream = fopen(filename, "wb");
+    
+    if (!file) {
+        fprintf(stderr, "[ERROR] Can not write output\n");
+        exit(1);
+    }
+    
+    fwrite(&file->header, SPIRV_HEADER_WORDS * WORD_SIZE, 1, stream);
+    fwrite(file->words + SPIRV_HEADER_WORDS, 
+           (file->num_words - SPIRV_HEADER_WORDS) * WORD_SIZE, 1, stream);
+    
+    fclose(stream);
 }

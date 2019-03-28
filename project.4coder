@@ -44,7 +44,6 @@ command_list = {
 		.cursor_at_end = true,
 		.cmd = {
 			{ "make run", .os = "linux" },
-            { "build/debug/main", .os = "win" },
 		},
 	},
 	{

@@ -1,6 +1,6 @@
 // NOTE: vector behaviour constants
 static const f32 GROWTH_FACTOR = 1.5f;
-static const u32 INITIAL_SIZE = 10;
+static const u32 INITIAL_SIZE  = 10;
 
 struct uint_vector  {
     u32 *data;

@@ -11,25 +11,27 @@ struct dfs_result {
     u32 *preorder;
     u32 *parent;
     u32 *sorted;
+    u32 size;
 };
 
 static struct dfs_result
-cfgc_dfs(struct cfgc *graph)
+cfgc_dfs_(struct cfgc *graph, u32 root, s32 terminate)
 {
     struct dfs_result res = {
-        .preorder = calloc(graph->nver, sizeof(u32)),
+        .preorder = malloc(graph->nver * sizeof(u32)),
         .sorted   = malloc(graph->nver * sizeof(u32)),
         .parent   = malloc(graph->nver * sizeof(u32))
     };
     
+    memset(res.preorder, UINT32_MAX, graph->nver * sizeof(u32));
+    
     struct int_stack node_stack = stack_init();
-    stack_push(&node_stack, 0);
+    stack_push(&node_stack, root);
     
     u32 t1 = 0;
     
     while (node_stack.size) {
         u32 node_index = stack_pop(&node_stack); 
-        //printf("[DEBUG] Visited node %d\n", node_index);
         
         u32 edges_from = graph->edges_from.data[node_index];
         u32 edges_to   = graph->edges_from.data[node_index + 1];
@@ -39,7 +41,7 @@ cfgc_dfs(struct cfgc *graph)
         
         for (u32 i = edges_from; i < edges_to; ++i) {
             u32 child = graph->edges.data[i];
-            if (!res.preorder[child]) {
+            if (res.preorder[child] == UINT32_MAX && (terminate == -1 || child != (u32) terminate)) {
                 res.parent[child] = node_index;
                 stack_push(&node_stack, child);
             }
@@ -48,6 +50,7 @@ cfgc_dfs(struct cfgc *graph)
     
     // NOTE: will not get read, init just for completeness sake
     res.parent[0] = 0;
+    res.size = t1;
     
     stack_free(&node_stack);
     
@@ -80,7 +83,7 @@ cfgc_bfs_(struct cfgc *graph, u32 root, s32 terminate)
         
         for (u32 i = edges_from; i < edges_to; ++i) {
             u32 child = graph->edges.data[i];
-            if (!visited[child] && (terminate != -1 && child != (u32) terminate)) {
+            if (!visited[child] && (terminate == -1 || child != (u32) terminate)) {
                 queue_push(&node_queue, child);
             }
         }
@@ -96,7 +99,7 @@ cfgc_bfs_(struct cfgc *graph, u32 root, s32 terminate)
 static struct bfs_result
 cfg_bfs(struct cfgc *graph)
 {
-    return(cfgc_bfs_(graph, 0, -1, NULL, NULL, NULL));
+    return(cfgc_bfs_(graph, 0, -1));
 }
 #endif
 
@@ -104,6 +107,23 @@ static struct uint_vector
 cfgc_bfs_restricted(struct cfgc *graph, u32 header, u32 merge)
 {
     return(cfgc_bfs_(graph, header, (s32) merge));
+}
+
+static struct uint_vector
+cfgc_dfs_restricted(struct cfgc *graph, u32 header, u32 merge)
+{
+    // TODO: modify DFS to return vectors
+    struct dfs_result dfs = cfgc_dfs_(graph, header, (s32) merge);
+    struct uint_vector res = {
+        .data = dfs.sorted,
+        .size = dfs.size,
+        .cap = graph->nver
+    };
+    
+    free(dfs.preorder);
+    free(dfs.parent);
+    
+    return(res);
 }
 
 static void
@@ -153,7 +173,7 @@ cfgc_find_min(u32 *preorder, u32 *sdom, u32 *label, s32 *ancestor, u32 v)
 static s32 *
 cfgc_dominators(struct cfgc *input)
 {
-    struct dfs_result dfs = cfgc_dfs(input);
+    struct dfs_result dfs = cfgc_dfs_(input, 0, -1);
     struct int_stack *bucket = malloc(input->nver * sizeof(struct int_stack));
     
     u32 *sdom = malloc(input->nver * sizeof(u32));
@@ -221,6 +241,46 @@ cfgc_dominators(struct cfgc *input)
     dfs_result_free(&dfs);
     
     return(dom);
+}
+
+static void
+add_incoming_edges(struct cfgc *cfg)
+{
+    struct uint_vector *edges_growing = malloc(cfg->nver * sizeof(struct uint_vector));
+    for (u32 i = 0; i < cfg->nver; ++i) {
+        edges_growing[i] = vector_init();
+    }
+    
+    // NOTE: run through outgoind edges and grow the
+    // respective incoming lists
+    for (u32 i = 0; i < cfg->nver; ++i) {
+        for (u32 j = cfg->edges_from.data[i]; j <  cfg->edges_from.data[i + 1]; ++j) {
+            u32 edge_from = i;
+            u32 edge_to = cfg->edges.data[j];
+            vector_push(edges_growing + edge_to, edge_from);
+        }
+    }
+    
+    cfg->in_edges      = vector_init_sized(cfg->neds);
+    cfg->in_edges_from = vector_init_sized(cfg->nver + 1);
+    
+    u32 total_edges = 0;
+    for (u32 i = 0; i < cfg->nver; ++i) {
+        vector_push(&cfg->in_edges_from, total_edges);
+        for (u32 j = 0; j < edges_growing[i].size; ++j) {
+            vector_push(&cfg->in_edges, edges_growing[i].data[j]);
+        }
+        total_edges += edges_growing[i].size;
+    }
+    
+    for (u32 i = 0; i < cfg->nver; ++i) {
+        vector_free(edges_growing + i);
+    }
+    
+    // NOTE: additional element for easier indexing
+    vector_push(&cfg->in_edges_from, cfg->neds);
+    
+    free(edges_growing);
 }
 
 static void
