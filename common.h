@@ -31,7 +31,14 @@ typedef double f64;
 #define NOTIMPLEMENTED ASSERT(false)
 #define SHOULDNOTHAPPEN NOTIMPLEMENTED
 
+static void *
+memdup(void *src, u32 size)
+{
+    void *dest = malloc(size);
+    return(memcpy(dest, src, size));
+}
+
 #include "vector.c"
 #include "stack.c"
 #include "queue.c"
-#include "cfg.c"
+#include "newcfg.c"

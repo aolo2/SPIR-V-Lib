@@ -35,6 +35,18 @@ vector_init_sized(u32 size)
     return(v);
 }
 
+static struct uint_vector
+vector_init_data(u32 *data, u32 size)
+{
+    struct uint_vector v = {
+        .cap = size,
+        .head = size,
+        .data = memdup(data, size * sizeof(u32))
+    };
+    
+    return(v);
+}
+
 static void
 vector_free(struct uint_vector *v)
 {

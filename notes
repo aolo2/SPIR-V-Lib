@@ -31,19 +31,12 @@
 
 // OpVariable, OpLoad
 // arithmetics OpSNegate, OpFNegate, OpIAdd, OpFAdd, OpISub, OpFSub, OpIMul, OpFMul, OpUDiv, OpSDiv, OpFDiv, OpUMod, OpSRem, OpSMod, OpFRem, OpFMod)
-// TODO: composite extract/construct
-// these are our 'assignments' in the cycle
-// 
-
 
 
 // operand of opstore can be a result of:
 // opload -> has one (meaningful) operand itself
 // opconstant... -> is final
 // arithmetics -> has operands itself
-
-// TODO: uniform/in/out! (is just an opvariable with memory access set)
-
 
 // Reverse computation of reaching definitions (of OpStore)
 // 
@@ -69,7 +62,7 @@
 // OpStore %a %23
 
 // opStore has one operand
-// check if operand is (a result of) opConstant -- linear_search (TODO: binary search?)
+// check if operand is (a result of) opConstant -- linear_search
 // if not:
 // check if is a result of OpLoad or Arithmetics inside the cycle
 // need all (opload, arithmetics) statements WITH THEIR RESULT ID's
@@ -187,5 +180,57 @@
 //    b++
 //    a = b
 // }
+
+// that (^^^) stuff is ALL DONE now! pheeew
+
+// Conditions for code motion:
+// 1. OpStore dominates all uses of variable (until the next OpStore)
+// 2. OpStore dominates all exits (if this is the last OpStore to this variable)
+ 
+
+// Expand on nr. 1:
+// - find all OpLoads of this pointer
+// which happen before a new OpStore to this pointer
+// - check if this OpLoad's basic block is dominated by the OpStore's basic block
+// 
+// What do we need to know?
+// we only need OpLoads AFTER the given OpStore. Use the dfs for this
+// IGNORE the current basic block, because we sure do dominate all the oploads
+// after our opstore
+// to check if dominates, go in the doms tree, stop if found matching BB or
+// -1
+
+
+// Expand on nr. 2
+// Prepare 'exit' nodes - list all BBs with no outgoing edges.
+// Check them all for being dominated by the given basic block
+
+
+
+// Expand on this:
+//
+// a = 1
+// for {
+// 	if {
+//		a = 2
+//     }
+//     b = a
+// }
+
+// b = a
+// operand 'a' is invariant by the old rules (but it's not though)
+// we need to check if the store we found domiates the load
+
+// 
+// 
+//  bb1   bb2  tail
+// [   ] [   ] ....
+//
+//  bb1   bb2    bb3    tail
+// [   ] [   ] [      ] ....
+//
+//  bb1   bb2  bb3 tail
+// [   ] [   ] [ ] ....
+//
 
 

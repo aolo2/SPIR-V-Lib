@@ -1,6 +1,6 @@
-struct cfgc {
+struct ir_cfg {
     u32 nver;
-    u32 neds;
+    s32 *dominators;
     struct uint_vector edges_from;
     struct uint_vector in_edges_from;
     struct uint_vector edges;
@@ -15,7 +15,7 @@ struct dfs_result {
 };
 
 static struct dfs_result
-cfgc_dfs_(struct cfgc *graph, u32 root, s32 terminate)
+cfgc_dfs_(struct ir_cfg *graph, u32 root, s32 terminate)
 {
     struct dfs_result res = {
         .preorder = malloc(graph->nver * sizeof(u32)),
@@ -58,7 +58,7 @@ cfgc_dfs_(struct cfgc *graph, u32 root, s32 terminate)
 }
 
 static struct uint_vector 
-cfgc_bfs_(struct cfgc *graph, u32 root, s32 terminate)
+cfgc_bfs_(struct ir_cfg *graph, u32 root, s32 terminate)
 {
     bool *visited = calloc(graph->nver, sizeof(bool));
     
@@ -97,20 +97,20 @@ cfgc_bfs_(struct cfgc *graph, u32 root, s32 terminate)
 
 #if 0
 static struct bfs_result
-cfg_bfs(struct cfgc *graph)
+cfg_bfs(struct ir_cfg *graph)
 {
-    return(cfgc_bfs_(graph, 0, -1));
+    return(ir_cfg_bfs_(graph, 0, -1));
 }
 #endif
 
 static struct uint_vector
-cfgc_bfs_restricted(struct cfgc *graph, u32 header, u32 merge)
+cfgc_bfs_restricted(struct ir_cfg *graph, u32 header, u32 merge)
 {
     return(cfgc_bfs_(graph, header, (s32) merge));
 }
 
 static struct uint_vector
-cfgc_dfs_restricted(struct cfgc *graph, u32 header, u32 merge)
+cfgc_dfs_restricted(struct ir_cfg *graph, u32 header, u32 merge)
 {
     // TODO: modify DFS to return vectors
     struct dfs_result dfs = cfgc_dfs_(graph, header, (s32) merge);
@@ -171,7 +171,7 @@ cfgc_find_min(u32 *preorder, u32 *sdom, u32 *label, s32 *ancestor, u32 v)
 // NOTE: dominators as per Lengauer-Tarjan, -1 means N/A
 // preorder contains T1 for each vertex, parent has DFS parents
 static s32 *
-cfgc_dominators(struct cfgc *input)
+cfgc_dominators(struct ir_cfg *input)
 {
     struct dfs_result dfs = cfgc_dfs_(input, 0, -1);
     struct int_stack *bucket = malloc(input->nver * sizeof(struct int_stack));
@@ -194,7 +194,7 @@ cfgc_dominators(struct cfgc *input)
     for (u32 i = 0; i < input->nver - 1; ++i) {
         u32 w = dfs.sorted[input->nver - 1 - i];
         u32 in_edges_from = input->in_edges_from.data[w];
-        u32 in_edges_to = (w == input->nver - 1 ? input->neds : input->in_edges_from.data[w + 1]);
+        u32 in_edges_to = (w == input->nver - 1 ? input->edges.size : input->in_edges_from.data[w + 1]);
         
         // NOTE: for each incident edge
         for (u32 j = in_edges_from; j < in_edges_to; ++j) {
@@ -244,7 +244,7 @@ cfgc_dominators(struct cfgc *input)
 }
 
 static void
-add_incoming_edges(struct cfgc *cfg)
+add_incoming_edges(struct ir_cfg *cfg)
 {
     struct uint_vector *edges_growing = malloc(cfg->nver * sizeof(struct uint_vector));
     for (u32 i = 0; i < cfg->nver; ++i) {
@@ -261,7 +261,7 @@ add_incoming_edges(struct cfgc *cfg)
         }
     }
     
-    cfg->in_edges      = vector_init_sized(cfg->neds);
+    cfg->in_edges      = vector_init_sized(cfg->edges.size);
     cfg->in_edges_from = vector_init_sized(cfg->nver + 1);
     
     u32 total_edges = 0;
@@ -278,13 +278,13 @@ add_incoming_edges(struct cfgc *cfg)
     }
     
     // NOTE: additional element for easier indexing
-    vector_push(&cfg->in_edges_from, cfg->neds);
+    vector_push(&cfg->in_edges_from, cfg->edges.size);
     
     free(edges_growing);
 }
 
 static void
-cfgc_free(struct cfgc *graph)
+cfgc_free(struct ir_cfg *graph)
 {
     vector_free(&graph->edges_from);
     vector_free(&graph->in_edges_from);

@@ -16,14 +16,9 @@ RELEASE_CFLAGS = -DRELEASE -O2
 CFLAGS = $(DEBUG_CFLAGS)
 BUILD_PATH = $(DEBUG_BUILD_PATH)
 
-# VULKAN_SDK_PATH = $(THIS)/1.1.85.0/x86_64
-# LDFLAGS = -L$(VULKAN_SDK_PATH)/lib `pkg-config --static --libs glfw3` -lvulkan
-# LDFLAGS = -lstdc++
-# SPIRV_TOOLS_PATH = $(THIS)/external/build/source/libSPIRV-Tools.a
-
 all:
 	@mkdir -p $(BUILD_PATH)
-	@/usr/bin/time -f"[TIME] %E" $(CC) $(CFLAGS) main.c -o $(BUILD_PATH)/$(APP_NAME).new
+	@/usr/bin/time -f"[TIME] %E" $(CC) $(CFLAGS) newinst.c -o $(BUILD_PATH)/$(APP_NAME).new
 	@rm -f $(BUILD_PATH)/$(APP_NAME)
 	@mv $(BUILD_PATH)/$(APP_NAME).new $(BUILD_PATH)/$(APP_NAME)
 
