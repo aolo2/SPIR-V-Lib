@@ -180,7 +180,7 @@ cfgc_dominators(struct ir_cfg *input)
     u32 *label = malloc(input->nver * sizeof(u32));
     s32 *ancestor = malloc(input->nver * sizeof(s32));
     
-    s32 *dom = malloc(input->nver * sizeof(s32));
+    s32 *dom = malloc(input->labels.size * sizeof(s32));
     
     for (u32 i = 0; i < input->nver; ++i) {
         bucket[i] = stack_init();

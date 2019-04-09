@@ -17,7 +17,7 @@ vector_init()
     struct uint_vector v = {
         .cap = INITIAL_SIZE,
         .head = 0,
-        .data = malloc(INITIAL_SIZE * sizeof(u32)),
+        .data = calloc(INITIAL_SIZE, sizeof(u32)),
     };
     
     return(v);
@@ -29,7 +29,7 @@ vector_init_sized(u32 size)
     struct uint_vector v = {
         .cap = size,
         .head = 0,
-        .data = malloc(size * sizeof(u32)),
+        .data = calloc(size, sizeof(u32)),
     };
     
     return(v);
@@ -78,4 +78,30 @@ vector_copy(struct uint_vector *v)
     memcpy(v_new.data, v->data, v->head * sizeof(u32));
     
     return(v_new);
+}
+
+static inline void
+show_array_u32(u32 *array, u32 size, const char *header)
+{
+    printf("%s:", header);
+    for (u32 i = 0; i < size; ++i) {
+        printf(" %d", array[i]);
+    }
+    printf("\n");
+}
+
+static inline void
+show_array_s32(s32 *array, u32 size, const char *header)
+{
+    printf("%s:", header);
+    for (u32 i = 0; i < size; ++i) {
+        printf(" %d", array[i]);
+    }
+    printf("\n");
+}
+
+static inline void
+show_vector_u32(struct uint_vector *v, const char *header)
+{
+    show_array_u32(v->data, v->size, header);
 }
