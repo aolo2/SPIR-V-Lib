@@ -1,4 +1,4 @@
 build
 data
 .*
-project.4coder
+*.4coder
