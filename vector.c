@@ -1,4 +1,3 @@
-// NOTE: vector behaviour constants
 static const f32 GROWTH_FACTOR = 1.5f;
 static const u32 INITIAL_SIZE  = 10;
 
@@ -66,6 +65,15 @@ vector_push(struct uint_vector *v, u32 item)
     v->data[v->head++] = item;
 }
 
+// NOTE: push only if not in vector already
+static void
+vector_push_maybe(struct uint_vector *v, u32 item)
+{
+    if (search_item_u32(v->data, v->size, item) == -1) {
+        vector_push(v, item);
+    }
+}
+
 static struct uint_vector
 vector_copy(struct uint_vector *v)
 {
@@ -78,30 +86,4 @@ vector_copy(struct uint_vector *v)
     memcpy(v_new.data, v->data, v->head * sizeof(u32));
     
     return(v_new);
-}
-
-static inline void
-show_array_u32(u32 *array, u32 size, const char *header)
-{
-    printf("%s:", header);
-    for (u32 i = 0; i < size; ++i) {
-        printf(" %d", array[i]);
-    }
-    printf("\n");
-}
-
-static inline void
-show_array_s32(s32 *array, u32 size, const char *header)
-{
-    printf("%s:", header);
-    for (u32 i = 0; i < size; ++i) {
-        printf(" %d", array[i]);
-    }
-    printf("\n");
-}
-
-static inline void
-show_vector_u32(struct uint_vector *v, const char *header)
-{
-    show_array_u32(v->data, v->size, header);
 }

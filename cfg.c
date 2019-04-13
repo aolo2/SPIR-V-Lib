@@ -1,147 +1,312 @@
-struct ir_cfg {
-    u32 nver;
-    s32 *dominators;
-    struct uint_vector edges_from;
-    struct uint_vector in_edges_from;
-    struct uint_vector edges;
-    struct uint_vector in_edges;
+enum mark {
+    WHITE,
+    GRAY,
+    BLACK
 };
 
-struct dfs_result {
+struct edge_list {
+    u32 data;
+    struct edge_list *next;
+};
+
+struct cfg_dfs_result {
     u32 *preorder;
+    u32 *postorder;
     u32 *parent;
-    u32 *sorted;
+    u32 *sorted_postorder;
+    u32 *sorted_preorder;
     u32 size;
 };
 
-static struct dfs_result
-cfgc_dfs_(struct ir_cfg *graph, u32 root, s32 terminate)
+// NOTE: SPIR-V doesn't demand all result id's to be densely packed,
+// so we can remove a res'id in the middle.
+struct ir_cfg {
+    struct uint_vector labels; // NOTE: zero means 'deleted'
+    u32 *conditions;
+    s32 *dominators;
+    struct edge_list **out;
+    struct edge_list **in;
+};
+
+static bool
+edge_list_push(struct edge_list **list, u32 item)
 {
-    struct dfs_result res = {
-        .preorder = malloc(graph->nver * sizeof(u32)),
-        .sorted   = malloc(graph->nver * sizeof(u32)),
-        .parent   = malloc(graph->nver * sizeof(u32))
-    };
-    
-    memset(res.preorder, UINT32_MAX, graph->nver * sizeof(u32));
-    
-    struct int_stack node_stack = stack_init();
-    stack_push(&node_stack, root);
-    
-    u32 t1 = 0;
-    
-    while (node_stack.size) {
-        u32 node_index = stack_pop(&node_stack); 
-        
-        u32 edges_from = graph->edges_from.data[node_index];
-        u32 edges_to   = graph->edges_from.data[node_index + 1];
-        
-        res.sorted[t1] = node_index;
-        res.preorder[node_index] = t1++;
-        
-        for (u32 i = edges_from; i < edges_to; ++i) {
-            u32 child = graph->edges.data[i];
-            if (res.preorder[child] == UINT32_MAX && (terminate == -1 || child != (u32) terminate)) {
-                res.parent[child] = node_index;
-                stack_push(&node_stack, child);
-            }
-        }
+    struct edge_list *vlist;
+    // NOTE: the list is empty
+    if (!(*list)) {
+        *list = malloc(sizeof(struct edge_list));
+        vlist = *list;
+        vlist->data = item;
+        vlist->next = NULL;
+        return(true);
     }
     
-    // NOTE: will not get read, init just for completeness sake
-    res.parent[0] = 0;
-    res.size = t1;
+    vlist = *list;
     
-    stack_free(&node_stack);
-    
-    return(res);
-}
-
-static struct uint_vector 
-cfgc_bfs_(struct ir_cfg *graph, u32 root, s32 terminate)
-{
-    bool *visited = calloc(graph->nver, sizeof(bool));
-    
-    struct uint_vector sorted = vector_init();
-    struct int_queue node_queue = queue_init();
-    
-    queue_push(&node_queue, root);
-    
-    while (node_queue.size) {
-        u32 node_index = queue_pop(&node_queue); 
-        if (visited[node_index] || (terminate != -1 && node_index == (u32) terminate)) {
-            continue;
-        }
-        
-        //printf("[DEBUG] Visited node %d\n", node_index);
-        
-        u32 edges_from = graph->edges_from.data[node_index];
-        u32 edges_to = graph->edges_from.data[node_index + 1];
-        
-        vector_push(&sorted, node_index);
-        visited[node_index] = true;
-        
-        for (u32 i = edges_from; i < edges_to; ++i) {
-            u32 child = graph->edges.data[i];
-            if (!visited[child] && (terminate == -1 || child != (u32) terminate)) {
-                queue_push(&node_queue, child);
-            }
-        }
+    while (vlist->data != item && vlist->next) {
+        vlist = vlist->next;
     }
     
-    queue_free(&node_queue);
-    free(visited);
+    if (vlist->data == item) {
+        return(false);
+    }
     
-    return(sorted);
-}
-
-#if 0
-static struct bfs_result
-cfg_bfs(struct ir_cfg *graph)
-{
-    return(ir_cfg_bfs_(graph, 0, -1));
-}
-#endif
-
-static struct uint_vector
-cfgc_bfs_restricted(struct ir_cfg *graph, u32 header, u32 merge)
-{
-    return(cfgc_bfs_(graph, header, (s32) merge));
-}
-
-static struct uint_vector
-cfgc_dfs_restricted(struct ir_cfg *graph, u32 header, u32 merge)
-{
-    // TODO: modify DFS to return vectors
-    struct dfs_result dfs = cfgc_dfs_(graph, header, (s32) merge);
-    struct uint_vector res = {
-        .data = dfs.sorted,
-        .size = dfs.size,
-        .cap = graph->nver
-    };
+    vlist->next = malloc(sizeof(struct edge_list));
+    vlist->next->data = item;
+    vlist->next->next = NULL;
     
-    free(dfs.preorder);
-    free(dfs.parent);
-    
-    return(res);
-}
-
-static void
-dfs_result_free(struct dfs_result *res)
-{
-    free(res->preorder);
-    free(res->sorted);
-    free(res->parent);
+    return(true);
 }
 
 static bool
-cfgc_preorder_less(u32 *preorder, u32 a, u32 b)
+edge_list_remove(struct edge_list **list, u32 item)
+{
+    struct edge_list *vlist = *list;
+    
+    // NOTE: the list is empty
+    if (!vlist) {
+        return(false);
+    }
+    
+    // NOTE: remove the first element
+    if (vlist->data == item) {
+        *list = vlist->next;
+        free(vlist);
+        return(true);
+    }
+    
+    while (vlist->next && vlist->next->data != item) {
+        vlist = vlist->next;
+    }
+    
+    if (vlist->next) {
+        struct edge_list *next = vlist->next;
+        vlist->next = vlist->next->next;
+        free(next);
+        return(true);
+    }
+    
+    return(false);
+}
+
+static bool
+edge_list_replace(struct edge_list *list, u32 old_item, u32 new_item)
+{
+    while (list && list->data != old_item) {
+        list = list->next;
+    }
+    
+    if (list) {
+        list->data = new_item;
+        return(true);
+    }
+    
+    return(false);
+}
+
+static void
+edge_list_free(struct edge_list *list)
+{
+    struct edge_list *next;
+    
+    while (list) {
+        next = list->next;
+        free(list);
+        list = next;
+    }
+}
+
+static struct ir_cfg
+cfg_init(u32 *labels, u32 nblocks)
+{
+    struct ir_cfg cfg = {
+        .labels = vector_init_data(labels, nblocks),
+        .conditions = calloc(nblocks, sizeof(u32)),
+        .out = calloc(nblocks, sizeof(struct edge_list *)),
+        .in = calloc(nblocks, sizeof(struct edge_list *))
+    };
+    
+    return(cfg);
+}
+
+static bool
+cfg_add_edge(struct ir_cfg *cfg, u32 from, u32 to)
+{
+    bool added = edge_list_push(cfg->out + from, to);
+    added = added && edge_list_push(cfg->in + to, from); // NOTE: returns the same value as the previous call
+    return(added);
+}
+
+static bool
+cfg_remove_edge(struct ir_cfg *cfg, u32 from, u32 to)
+{
+    bool removed = edge_list_remove(cfg->out + from, to);
+    removed = removed && edge_list_remove(cfg->in + to, from);
+    return(removed);
+}
+
+static bool
+cfg_redirect_edge(struct ir_cfg *cfg, u32 from, u32 to_old, u32 to_new)
+{
+    bool redirected = edge_list_replace(cfg->out[from], to_old, to_new);
+    redirected = redirected && edge_list_push(cfg->in + to_new, from);
+    redirected = redirected && edge_list_remove(cfg->in + to_old, from);
+    return(redirected);
+}
+
+static void
+cfg_add_vertex(struct ir_cfg *cfg, u32 label)
+{
+    vector_push(&cfg->labels, label);
+    
+    cfg->out = realloc(cfg->out, cfg->labels.size * sizeof(struct edge_list *));
+    cfg->in = realloc(cfg->in, cfg->labels.size * sizeof(struct edge_list *));
+    
+    cfg->out[cfg->labels.size - 1] = 0x00;
+    cfg->in[cfg->labels.size - 1] = 0x00;
+}
+
+static void
+cfg_remove_vertex(struct ir_cfg *cfg, u32 index)
+{
+    struct edge_list *out = cfg->out[index];
+    struct edge_list *in = cfg->in[index];
+    
+    cfg->labels.data[index] = 0;
+    
+    do {
+        edge_list_remove(cfg->in + out->data, index);
+        out = out->next;
+    } while (out);
+    
+    do {
+        edge_list_remove(cfg->out + in->data, index);
+        in = in->next;
+    } while (in);
+}
+
+static void
+cfg_show(struct ir_cfg *cfg) 
+{
+    for (u32 i = 0; i < cfg->labels.size; ++i) {
+        if (cfg->labels.data[i]) {
+            printf("Vertex %d\n", cfg->labels.data[i]);
+            struct edge_list *edge = cfg->out[i];
+            printf("out:");
+            while (edge) {
+                printf(" []->%d", cfg->labels.data[edge->data]);
+                edge = edge->next;
+            }
+            
+            edge = cfg->in[i];
+            printf("\nin:");
+            while (edge) {
+                printf(" %d->[]", cfg->labels.data[edge->data]);
+                edge = edge->next;
+            }
+            printf("\n\n");
+        }
+    }
+}
+
+static struct cfg_dfs_result
+cfg_dfs(struct ir_cfg *cfg)
+{
+    u32 maxnver = cfg->labels.size;
+    struct cfg_dfs_result dfs = {
+        .preorder         = calloc(maxnver,  sizeof(u32)),
+        .postorder        = calloc(maxnver,  sizeof(u32)),
+        .parent           = malloc(maxnver * sizeof(u32)),
+        .sorted_preorder  = malloc(maxnver * sizeof(u32)),
+        .sorted_postorder = malloc(maxnver * sizeof(u32))
+    };
+    
+    enum mark *marks = malloc(maxnver * sizeof(enum mark));
+    memset(marks, WHITE, maxnver * sizeof(enum mark));
+    
+    u32 t1 = 0;
+    u32 t2 = 0;
+    struct int_stack node_stack = stack_init();
+    stack_push(&node_stack, 0);
+    
+    while (node_stack.size) {
+        u32 node = stack_pop(&node_stack);
+        
+        if (marks[node] == WHITE) {
+            
+            // NOTE: pre-visit actions
+            marks[node] = GRAY;
+            dfs.sorted_preorder[t1] = node;
+            dfs.preorder[node] = t1++;
+            // ======================
+            
+            stack_push(&node_stack, node);
+            
+            struct edge_list *edge = cfg->out[node];
+            while (edge) {
+                u32 child = edge->data;
+                if (marks[child] == WHITE) {
+                    dfs.parent[child] = node;
+                    stack_push(&node_stack, child);
+                }
+                edge = edge->next;
+            }
+        } else if (marks[node] == GRAY) {
+            // NOTE: post-visit actions
+            marks[node] = BLACK;
+            dfs.sorted_postorder[t2] = node;
+            dfs.postorder[node] = t2++;
+            // =======================
+        }
+    }
+    
+    ASSERT(t1 == t2);
+    
+    dfs.size = t1;
+    dfs.parent[0] = UINT32_MAX;
+    
+    return(dfs);
+}
+
+static struct uint_vector
+cfg_bfs_order(struct ir_cfg *cfg)
+{
+    struct uint_vector order = vector_init();
+    struct int_queue node_queue = queue_init();
+    queue_push(&node_queue, 0);
+    
+    bool *visited = calloc(cfg->labels.size, sizeof(bool));
+    
+    while (node_queue.size) {
+        u32 node = queue_pop(&node_queue);
+        struct edge_list *edge = cfg->out[node];
+        
+        vector_push(&order, node);
+        
+        while (edge) {
+            u32 child = edge->data;
+            if (!visited[child]) {
+                queue_push(&node_queue, child);
+                visited[child] = true;
+            }
+            edge = edge->next;
+        }
+    }
+    
+    free(visited);
+    
+    return(order);
+}
+
+
+static inline bool
+cfg_preorder_less(u32 *preorder, u32 a, u32 b)
 {
     return(preorder[a] < preorder[b]);
 }
 
 static u32
-cfgc_find_min(u32 *preorder, u32 *sdom, u32 *label, s32 *ancestor, u32 v)
+cfg_find_min(u32 *preorder, u32 *sdom, u32 *label, s32 *ancestor, u32 v)
 {
     if (ancestor[v] == -1) {
         return(v);
@@ -157,7 +322,7 @@ cfgc_find_min(u32 *preorder, u32 *sdom, u32 *label, s32 *ancestor, u32 v)
     
     while (s.size) {
         v = stack_pop(&s);
-        if (cfgc_preorder_less(preorder, sdom[label[ancestor[v]]], sdom[label[v]])) {
+        if (cfg_preorder_less(preorder, sdom[label[ancestor[v]]], sdom[label[v]])) {
             label[v] = label[ancestor[v]];
         }
         ancestor[v] = ancestor[u];
@@ -171,18 +336,18 @@ cfgc_find_min(u32 *preorder, u32 *sdom, u32 *label, s32 *ancestor, u32 v)
 // NOTE: dominators as per Lengauer-Tarjan, -1 means N/A
 // preorder contains T1 for each vertex, parent has DFS parents
 static s32 *
-cfgc_dominators(struct ir_cfg *input)
+cfg_dominators(struct ir_cfg *input, struct cfg_dfs_result *dfs)
 {
-    struct dfs_result dfs = cfgc_dfs_(input, 0, -1);
-    struct int_stack *bucket = malloc(input->nver * sizeof(struct int_stack));
+    u32 nver = input->labels.size;
+    struct int_stack *bucket = malloc(nver * sizeof(struct int_stack));
     
-    u32 *sdom = malloc(input->nver * sizeof(u32));
-    u32 *label = malloc(input->nver * sizeof(u32));
-    s32 *ancestor = malloc(input->nver * sizeof(s32));
+    u32 *sdom = malloc(nver * sizeof(u32));
+    u32 *label = malloc(nver * sizeof(u32));
+    s32 *ancestor = malloc(nver * sizeof(s32));
     
-    s32 *dom = malloc(input->labels.size * sizeof(s32));
+    s32 *dom = malloc(nver * sizeof(s32));
     
-    for (u32 i = 0; i < input->nver; ++i) {
+    for (u32 i = 0; i < nver; ++i) {
         bucket[i] = stack_init();
         sdom[i] = label[i] = i;
         ancestor[i] = -1;
@@ -191,37 +356,36 @@ cfgc_dominators(struct ir_cfg *input)
     
     // NOTE: for all vertices in reverse preorder except ROOT! Root always 
     // has preorder 0, so we can just skip the first (last) element
-    for (u32 i = 0; i < input->nver - 1; ++i) {
-        u32 w = dfs.sorted[input->nver - 1 - i];
-        u32 in_edges_from = input->in_edges_from.data[w];
-        u32 in_edges_to = (w == input->nver - 1 ? input->edges.size : input->in_edges_from.data[w + 1]);
+    for (u32 i = 0; i < nver - 1; ++i) {
+        u32 w = dfs->sorted_preorder[nver - 1 - i];
         
         // NOTE: for each incident edge
-        for (u32 j = in_edges_from; j < in_edges_to; ++j) {
-            u32 v = input->in_edges.data[j];
-            u32 u = cfgc_find_min(dfs.preorder, sdom, label, ancestor, v);
-            if (cfgc_preorder_less(dfs.preorder, sdom[u], sdom[w])) {
+        struct edge_list *in_edge = input->in[w];
+        while (in_edge) {
+            u32 u = cfg_find_min(dfs->preorder, sdom, label, ancestor, in_edge->data);
+            if (cfg_preorder_less(dfs->preorder, sdom[u], sdom[w])) {
                 sdom[w] = sdom[u];
             }
+            in_edge = in_edge->next;
         }
         
-        ancestor[w] = dfs.parent[w];
+        ancestor[w] = dfs->parent[w];
         stack_push(bucket + sdom[w], w);
         
-        struct int_stack parent_bucket = bucket[dfs.parent[w]];
+        struct int_stack parent_bucket = bucket[dfs->parent[w]];
         for (u32 j = 0; j < parent_bucket.size; ++j) {
             u32 v = parent_bucket.data[j];
-            u32 u = cfgc_find_min(dfs.preorder, sdom, label, ancestor, v);
+            u32 u = cfg_find_min(dfs->preorder, sdom, label, ancestor, v);
             
-            dom[v] = (sdom[u] == sdom[v] ? dfs.parent[w] : u);
+            dom[v] = (sdom[u] == sdom[v] ? dfs->parent[w] : u);
         }
         
-        stack_clear(bucket + dfs.parent[w]);
+        stack_clear(bucket + dfs->parent[w]);
     }
     
     // NOTE: for all vertices except ROOT in preorder
-    for (u32 i = 1; i < input->nver; ++i) {
-        u32 w = dfs.sorted[i];
+    for (u32 i = 1; i < nver; ++i) {
+        u32 w = dfs->sorted_preorder[i];
         if (dom[w] != (s32) sdom[w]) {
             dom[w] = dom[dom[w]];
         }
@@ -229,7 +393,7 @@ cfgc_dominators(struct ir_cfg *input)
     
     dom[0] = -1;
     
-    for (u32 i = 0; i < input->nver; ++i) {
+    for (u32 i = 0; i < nver; ++i) {
         stack_free(bucket + i);
     }
     
@@ -238,56 +402,23 @@ cfgc_dominators(struct ir_cfg *input)
     free(label);
     free(ancestor);
     
-    dfs_result_free(&dfs);
+    //dfs_result_free(&dfs);
     
     return(dom);
 }
 
 static void
-add_incoming_edges(struct ir_cfg *cfg)
+cfg_free(struct ir_cfg *cfg)
 {
-    struct uint_vector *edges_growing = malloc(cfg->nver * sizeof(struct uint_vector));
-    for (u32 i = 0; i < cfg->nver; ++i) {
-        edges_growing[i] = vector_init();
+    for (u32 i = 0; i < cfg->labels.size; ++i) {
+        edge_list_free(cfg->out[i]);
+        edge_list_free(cfg->in[i]);
     }
     
-    // NOTE: run through outgoind edges and grow the
-    // respective incoming lists
-    for (u32 i = 0; i < cfg->nver; ++i) {
-        for (u32 j = cfg->edges_from.data[i]; j <  cfg->edges_from.data[i + 1]; ++j) {
-            u32 edge_from = i;
-            u32 edge_to = cfg->edges.data[j];
-            vector_push(edges_growing + edge_to, edge_from);
-        }
-    }
+    free(cfg->out);
+    free(cfg->in);
     
-    cfg->in_edges      = vector_init_sized(cfg->edges.size);
-    cfg->in_edges_from = vector_init_sized(cfg->nver + 1);
-    
-    u32 total_edges = 0;
-    for (u32 i = 0; i < cfg->nver; ++i) {
-        vector_push(&cfg->in_edges_from, total_edges);
-        for (u32 j = 0; j < edges_growing[i].size; ++j) {
-            vector_push(&cfg->in_edges, edges_growing[i].data[j]);
-        }
-        total_edges += edges_growing[i].size;
-    }
-    
-    for (u32 i = 0; i < cfg->nver; ++i) {
-        vector_free(edges_growing + i);
-    }
-    
-    // NOTE: additional element for easier indexing
-    vector_push(&cfg->in_edges_from, cfg->edges.size);
-    
-    free(edges_growing);
-}
-
-static void
-cfgc_free(struct ir_cfg *graph)
-{
-    vector_free(&graph->edges_from);
-    vector_free(&graph->in_edges_from);
-    vector_free(&graph->in_edges);
-    vector_free(&graph->edges);
+    vector_free(&cfg->labels);
+    free(cfg->conditions);
+    free(cfg->dominators);
 }

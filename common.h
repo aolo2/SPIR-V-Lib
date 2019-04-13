@@ -17,38 +17,17 @@ typedef int8_t  s8;
 typedef float  f32;
 typedef double f64;
 
-#ifndef RELEASE
 #define ASSERT(expr) {\
     if (!(expr)) {\
         fprintf(stderr, "\n[ASSERT] %s:%d\n\n", __FILE__, __LINE__);\
-        exit(1);\
+        __builtin_trap();\
     }\
 }
-#else
-#define ASSERT(expr)
-#endif
 
 #define NOTIMPLEMENTED ASSERT(false)
 #define SHOULDNOTHAPPEN NOTIMPLEMENTED
 
-static void *
-memdup(void *src, u32 size)
-{
-    void *dest = malloc(size);
-    return(memcpy(dest, src, size));
-}
-
-static inline s32
-search_item_u32(u32 *array, u32 count, u32 item)
-{
-    for (u32 i = 0; i < count; ++i) {
-        if (array[i] == item) {
-            return(i);
-        }
-    }
-    return(-1);
-}
-
+#include "utils.c"
 #include "vector.c"
 #include "stack.c"
 #include "queue.c"

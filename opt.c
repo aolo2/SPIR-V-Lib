@@ -1,7 +1,7 @@
 static bool
 dominates(u32 parent, s32 child, s32 *dominators)
 {
-    if (parent == child) {
+    if (parent == (u32) child) {
         return(true);
     }
     

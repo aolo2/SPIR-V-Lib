@@ -1,9 +1,3 @@
-#include "common.h"
-
-#include "newinst.c"
-#include "newcfg.c"
-#include "newopt.c"
-
 struct ir_header {
     u32 magic_number;
     u32 version;
@@ -55,7 +49,6 @@ get_binary(const char *filename, u32 *size)
     
     return(buffer);
 }
-
 
 static struct ir
 eat_ir(u32 *data, u32 size)
@@ -154,8 +147,8 @@ eat_ir(u32 *data, u32 size)
         file.blocks[block_number++] = block;
     }
     
-    file.cfg.dominators = cfg_dominators(&file.cfg);
-    
+    struct cfg_dfs_result dfs = cfg_dfs(&file.cfg);
+    file.cfg.dominators = cfg_dominators(&file.cfg, &dfs);
     // =======================
     
     
@@ -256,7 +249,6 @@ dump_ir(struct ir *file, const char *filename)
     fclose(stream);
 }
 
-// TODO: return status?
 static void
 delete_instruction(/*struct basic_block *block, */struct instruction_list **inst)
 {
@@ -274,7 +266,6 @@ delete_instruction(/*struct basic_block *block, */struct instruction_list **inst
     free(vinst);
 }
 
-// TODO: return status?
 static void
 append_instruction(struct basic_block *block, struct instruction_t instruction)
 {
@@ -341,19 +332,4 @@ add_basic_block(struct ir *file)
     file->blocks[file->cfg.labels.size - 1] = new_block;
     
     return(file->blocks + file->cfg.labels.size - 1);
-}
-
-s32
-main()
-{
-    const char *filename = "W:/vlk/data/cycle.frag.spv";
-    
-    u32 num_words;
-    u32 *words = get_binary(filename, &num_words);
-    
-    struct ir file = eat_ir(words, num_words);
-    free(words);
-    
-    dump_ir(&file, "W:/vlk/data/cycle2.frag.spv");
-    destroy_ir(&file);
 }
