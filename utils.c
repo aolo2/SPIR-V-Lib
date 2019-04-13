@@ -15,3 +15,12 @@ search_item_u32(u32 *array, u32 count, u32 item)
     }
     return(-1);
 }
+
+static s32
+compare_u32(const void *p1, const void *p2)
+{
+    u32 a = *((u32 *) p1);
+    u32 b = *((u32 *) p2);
+    
+    return(a - b);
+}
