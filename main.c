@@ -15,7 +15,6 @@ main(void)
     struct ir file = eat_ir(words, num_words);
     free(words);
     
-    //struct cfg_dfs_result dfs = cfg_dfs(&file.cfg);
     //struct uint_vector df = ssa_dominance_frontier(&file.cfg, &dfs, ver, 2);
     ssa_convert(&file);
     

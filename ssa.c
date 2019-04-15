@@ -1,3 +1,20 @@
+static bool
+dominates(u32 parent, s32 child, s32 *dominators)
+{
+    if (parent == (u32) child) {
+        return(true);
+    }
+    
+    do {
+        child = dominators[child];
+        if (child == (s32) parent) {
+            return(true);
+        }
+    } while (child != -1);
+    
+    return(false);
+}
+
 static struct uint_vector *
 ssa_dominance_frontier_all(struct ir_cfg *cfg, struct cfg_dfs_result *dfs)
 {
@@ -102,19 +119,92 @@ ssa_iterate_frontier(struct ir_cfg *cfg, struct cfg_dfs_result *dfs, struct uint
 
 
 static struct uint_vector
-ssa_dominance_frontier(struct ir_cfg *cfg, struct cfg_dfs_result *dfs, u32 *vertices, u32 n)
+ssa_dominance_frontier(struct ir_cfg *cfg, struct cfg_dfs_result *dfs, struct uint_vector *vertices)
 {
-    struct uint_vector vertices_vec = vector_init_data(vertices, n);
-    struct uint_vector df1 = ssa_dominance_frontier_subset(cfg, dfs, &vertices_vec);
-    struct uint_vector dfp = ssa_iterate_frontier(cfg, dfs, &df1, &vertices_vec);
-    
+    struct uint_vector df1 = ssa_dominance_frontier_subset(cfg, dfs, vertices);
+    struct uint_vector dfp = ssa_iterate_frontier(cfg, dfs, &df1, vertices);
     return(dfp);
+}
+
+// NOTE: variable is passed by value, we modify it here
+static u32
+ssa_insert_variable(struct ir *file, u32 block_index, struct instruction_t variable, u32 version)
+{
+    u32 res_id = file->header.bound;
+    file->header.bound++;
+    
+    variable.OpVariable.result_id = res_id;
+    prepend_instruction(file->blocks + block_index, variable);
+    
+    return(res_id);
+}
+
+static void
+ssa_traverse(struct ir *file, struct int_stack *versions, u32 *counter, struct instruction_t original_variable, u32 mapping[100], u32 block_index)
+{
+    u32 variable = original_variable.OpVariable.result_id;
+    struct instruction_list *inst = file->blocks[block_index].instructions;
+    
+    while (inst) {
+        if (inst->data.opcode == OpLoad) {
+            u32 pointer = inst->data.OpLoad.pointer;
+            if (pointer == variable) {
+                u32 version = stack_top(versions);
+                u32 version_id = mapping[version];
+                inst->data.OpLoad.pointer = version_id;
+            }
+        }
+        
+        if (inst->data.opcode == OpStore && inst->data.OpStore.pointer == variable) {
+            ssa_insert_variable(file, 0 /* TODO: get actual root block */, original_variable, *counter);
+            stack_push(versions, *counter);
+            *counter += 1;
+        }
+        
+        inst = inst->next;
+    }
+    
+    struct edge_list *succ_edge = file->cfg.out[block_index];
+    u32 succ_order = 0;
+    while (succ_edge) {
+        int succ_index = succ_edge->data;
+        u32 pred_index = cfg_whichpred(&file->cfg, succ_index, block_index);
+        struct basic_block *succ = file->blocks + succ_index;
+        struct instruction_list *succ_inst = succ->instructions;
+        
+        while (succ_inst) {
+            if (succ_inst->data.opcode == OpPhi) {
+                succ_inst->data.OpPhi.variables[pred_index] = mapping[stack_top(versions)];
+            }
+            succ_inst = succ_inst->next;
+        }
+        
+        ++succ_order;
+        succ_edge = succ_edge->next;
+    }
+    
+    for (u32 i = 0; i < file->cfg.labels.size; ++i) {
+        if (file->cfg.dominators[i] == block_index) {
+            ssa_traverse(file, versions, counter, original_variable, mapping, i);
+        }
+    }
+    
+    inst = file->blocks[block_index].instructions;
+    while (inst) {
+        if (inst->data.opcode == OpStore) {
+            if (search_item_u32(mapping, 100, inst->data.OpStore.pointer) != -1) { 
+                stack_pop(versions);
+                inst = inst->next;
+            }
+        }
+    }
 }
 
 static void
 ssa_convert(struct ir *file)
 {
     struct uint_vector variables = vector_init();
+    struct cfg_dfs_result dfs = cfg_dfs(&file->cfg); // NOTE: need postorder for DF
     
     for (u32 i = 0; i < file->cfg.labels.size; ++i) {
         struct basic_block *block = file->blocks + i;
@@ -135,6 +225,8 @@ ssa_convert(struct ir *file)
     }
     
     struct uint_vector *store_blocks = malloc(variables.size * sizeof(struct uint_vector));
+    struct uint_vector *phi_locations = malloc(variables.size * sizeof(struct uint_vector));
+    
     for (u32 i = 0; i < variables.size; ++i) {
         store_blocks[i] = vector_init();
     }
@@ -153,26 +245,32 @@ ssa_convert(struct ir *file)
         }
     }
     
-    int a = 1;
+    for (u32 var_index = 0; var_index < variables.size; ++var_index) {
+        if (store_blocks[var_index].size > 1) {
+            phi_locations[var_index] = ssa_dominance_frontier(&file->cfg, &dfs, store_blocks + var_index);
+        } else {
+            phi_locations[var_index] = vector_init();
+        }
+    }
     
-    // TODO:
-    // pass all opstores to compute DF
-    // for each node in DF we need to find where control came from
-    // WE KNOW that it either directly from one of the opstore nodes or 
-    // there is a straight path from opstore node to us (check all :( )
-    // we know that because the predecessor is dominated by one of the blocks
-    // we need only to know which of the predecessors is dominated by which block
-    // do it by checking all :-)
     
-    // insert phi functions
-    // pseudocode, we have DF and parent_nodes
-    // for (node of DF)
-    //     phi = {}
-    //     for (predecessor of node)
-    //         for (parent of parent_nodes)
-    //             if (dominates(parent, predecessor)
-    //                  phi.add({predecessor, value in parent })
+    struct int_stack versions = stack_init();
+    u32 counter = 0;
+    u32 mapping[100] = { 0 }; // TODO: count OpStores??
     
-    // reindex
+    // TODO: get actual OpVariables
+    struct instruction_t original_variable;
+    original_variable.wordcount = 4;
+    original_variable.opcode = OpVariable;
     
+    struct opvariable_t opvar = {
+        .result_type = 0,
+        .result_id = 1000,
+        .storage_class = 0
+    };
+    
+    original_variable.OpVariable = opvar;
+    
+    
+    ssa_traverse(file, &versions, &counter, original_variable, mapping, 0);
 }

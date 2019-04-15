@@ -21,6 +21,7 @@ enum opcode_t {
     OpSMod = 139,
     OpFRem = 140,
     OpFMod = 141,
+    OpPhi = 245,
     OpLoopMerge = 246,
     OpSelectionMerge = 247,
     OpLabel = 248,
@@ -54,6 +55,13 @@ struct opbranchconditional_t {
 struct opselectionmerge_t {
     u32 merge_block;
     u32 selection_control;
+};
+
+struct opphi_t {
+    u32 result_type;
+    u32 result_id;
+    u32 *variables;
+    u32 *parents;
 };
 
 struct oploopmerge_t {
@@ -98,6 +106,7 @@ struct instruction_t {
         struct opvariable_t OpVariable;
         struct opbranch_t OpBranch;
         struct opbranchconditional_t OpBranchConditional;
+        struct opphi_t OpPhi;
         struct opselectionmerge_t OpSelectionMerge;
         struct oploopmerge_t OpLoopMerge;
         struct opstore_t OpStore;
@@ -150,6 +159,17 @@ get_instruction(u32 *word)
             instruction.OpBranchConditional.true_label = *(word++);
             instruction.OpBranchConditional.false_label = *(word++);
         } break;
+        
+        case OpPhi: {
+            instruction.OpPhi.result_type = *(word++);
+            instruction.OpPhi.result_id = *(word++);
+            instruction.OpPhi.variables = malloc((instruction.wordcount - 3) / 2 * sizeof(u32));
+            instruction.OpPhi.parents = malloc((instruction.wordcount - 3) / 2 * sizeof(u32));
+            for (u32 i = 0; i < instruction.wordcount - 3; ++i) {
+                instruction.OpPhi.variables[i] = *(word++);
+                instruction.OpPhi.parents[i] = *(word++);
+            }
+        };
         
         case OpSelectionMerge: {
             instruction.OpSelectionMerge.merge_block = *(word++);
@@ -240,6 +260,12 @@ dump_instruction(struct instruction_t *inst, u32 *buffer)
             buffer[1] = inst->OpBranchConditional.condition;
             buffer[2] = inst->OpBranchConditional.true_label;
             buffer[3] = inst->OpBranchConditional.false_label;
+        } break;
+        
+        case OpPhi: {
+            buffer[1] = inst->OpPhi.result_type;
+            buffer[2] = inst->OpPhi.result_id;
+            // TODO: dump OpPhi
         } break;
         
         case OpSelectionMerge: {

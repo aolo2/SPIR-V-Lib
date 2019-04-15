@@ -407,6 +407,25 @@ cfg_dominators(struct ir_cfg *input, struct cfg_dfs_result *dfs)
     return(dom);
 }
 
+static u32
+cfg_whichpred(struct ir_cfg *cfg, u32 block_index, u32 pred_index)
+{
+    struct edge_list *edge = cfg->in[block_index];
+    u32 which = 0;
+    
+    while (edge) {
+        if (edge->data == pred_index) {
+            break;
+        }
+        ++which;
+        edge = edge->next;
+    }
+    
+    ASSERT(edge != NULL);
+    
+    return(which);
+}
+
 static void
 cfg_free(struct ir_cfg *cfg)
 {

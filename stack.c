@@ -37,6 +37,13 @@ stack_pop(struct int_stack *s)
     return(s->data[--s->head]);
 }
 
+static s32
+stack_top(struct int_stack *s)
+{
+    ASSERT(s->size);
+    return(s->data[s->head - 1]);
+}
+
 static void
 stack_clear(struct int_stack *s)
 {

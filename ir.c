@@ -267,6 +267,26 @@ delete_instruction(/*struct basic_block *block, */struct instruction_list **inst
 }
 
 static void
+prepend_instruction(struct basic_block *block, struct instruction_t instruction)
+{
+    struct instruction_list *first = block->instructions;
+    
+    if (!first) {
+        first = malloc(sizeof(struct instruction_list));
+        first->data = instruction;
+        first->prev = NULL;
+        first->next = NULL;
+        block->instructions = first;
+    } else {
+        block->instructions = malloc(sizeof(struct instruction_list));
+        block->instructions->data = instruction;
+        block->instructions->prev = NULL;
+        block->instructions->next = first;
+        first->prev = block->instructions;
+    }
+}
+
+static void
 append_instruction(struct basic_block *block, struct instruction_t instruction)
 {
     struct instruction_list *last = block->instructions;
