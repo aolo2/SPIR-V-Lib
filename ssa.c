@@ -126,61 +126,58 @@ ssa_dominance_frontier(struct ir_cfg *cfg, struct cfg_dfs_result *dfs, struct ui
     return(dfp);
 }
 
-// NOTE: variable is passed by value, we modify it here
 static u32
-ssa_insert_variable(struct ir *file, u32 block_index, struct instruction_t *variable)
+ssa_insert_variable(struct ir *file, u32 block_index, u32 var_index, struct uint_vector *mapping, struct instruction_t variable)
 {
-    u32 res_id = file->header.bound;
-    file->header.bound++;
-    
-    variable->OpVariable.result_id = res_id;
-    prepend_instruction(file->blocks + block_index, variable);
-    
+    u32 res_id = file->header.bound++;
+    variable.OpVariable.result_id = res_id;
+    prepend_instruction(file->blocks + block_index, variable); // NOTE: only a copy is inserted
+    vector_push(mapping, res_id);
     return(res_id);
 }
 
 static void
-ssa_traverse(struct ir *file, struct int_stack *versions, u32 *counter, struct instruction_t *original_variable, u32 mapping[100], u32 block_index)
+ssa_traverse(struct ir *file, struct int_stack *versions, u32 *counter, struct instruction_t *original_variable, struct uint_vector *mapping, struct uint_vector *phi_functions, u32 var_index, u32 block_index)
 {
     u32 variable = original_variable->OpVariable.result_id;
     struct instruction_list *inst = file->blocks[block_index].instructions;
     
-    // TODO: mapping!!!
-    // TODO: insert or use version -- check it!~!!!!!!
-    
     while (inst) {
-#if 0
         // NOTE: use of variable
         if (inst->data.opcode == OpLoad) {
             u32 pointer = inst->data.OpLoad.pointer;
             if (pointer == variable) {
                 u32 version = stack_top(versions);
-                u32 version_id = mapping[version];
+                u32 version_id = mapping->data[version];
                 inst->data.OpLoad.pointer = version_id;
             }
         }
-#endif
+        
         // NOTE: new assignment to variable
         if (inst->data.opcode == OpStore && inst->data.OpStore.pointer == variable) {
-            ssa_insert_variable(file, 0 /* TODO: get actual root block */, original_variable);
+            // TODO: get actual root block
+            u32 new_version = ssa_insert_variable(file, 0, var_index, mapping, *original_variable);
+            inst->data.OpStore.pointer = new_version;
             stack_push(versions, *counter);
             *counter += 1;
         }
         
         inst = inst->next;
     }
-#if 0
+    
     struct edge_list *succ_edge = file->cfg.out[block_index];
     u32 succ_order = 0;
     while (succ_edge) {
-        int succ_index = succ_edge->data;
+        u32 succ_index = succ_edge->data;
         u32 pred_index = cfg_whichpred(&file->cfg, succ_index, block_index);
         struct basic_block *succ = file->blocks + succ_index;
         struct instruction_list *succ_inst = succ->instructions;
         
         while (succ_inst) {
-            if (succ_inst->data.opcode == OpPhi) {
-                succ_inst->data.OpPhi.variables[pred_index] = mapping[stack_top(versions)];
+            if (succ_inst->data.opcode == OpPhi && search_item_u32(phi_functions->data, phi_functions->size, succ_inst->data.OpPhi.result_id) != -1) {
+                u32 version = stack_top(versions);
+                succ_inst->data.OpPhi.variables[pred_index] = mapping->data[version];
+                succ_inst->data.OpPhi.parents[pred_index] = file->cfg.labels.data[block_index];
             }
             succ_inst = succ_inst->next;
         }
@@ -191,27 +188,26 @@ ssa_traverse(struct ir *file, struct int_stack *versions, u32 *counter, struct i
     
     for (u32 i = 0; i < file->cfg.labels.size; ++i) {
         if (file->cfg.dominators[i] == (s32) block_index) {
-            ssa_traverse(file, versions, counter, original_variable, mapping, i);
+            ssa_traverse(file, versions, counter, original_variable, mapping, phi_functions, var_index, i);
         }
     }
     
     inst = file->blocks[block_index].instructions;
     while (inst) {
         if (inst->data.opcode == OpStore) {
-            if (search_item_u32(mapping, 100, inst->data.OpStore.pointer) != -1) { 
+            if (search_item_u32(mapping->data, mapping->size, inst->data.OpStore.pointer) != -1) { 
                 stack_pop(versions);
-                inst = inst->next;
             }
         }
+        inst = inst->next;
     }
-#endif
 }
 
 static void
 ssa_convert(struct ir *file)
 {
     struct uint_vector variables = vector_init();
-    struct instruction_t *variable_instructions = malloc(100 * sizeof(struct instruction_t)); // TODO: count variables
+    struct instruction_list *variable_instructions[100];
     struct cfg_dfs_result dfs = cfg_dfs(&file->cfg); // NOTE: need postorder for DF
     
     for (u32 i = 0; i < file->cfg.labels.size; ++i) {
@@ -222,7 +218,7 @@ ssa_convert(struct ir *file)
         while (instruction) {
             if (instruction->data.opcode == OpVariable) {
                 reading = true;
-                variable_instructions[variables.head] = instruction->data;
+                variable_instructions[variables.head] = instruction;
                 vector_push(&variables, instruction->data.OpVariable.result_id);
             } else if (reading) {
                 // NOTE: we've read all OpVariables. 
@@ -253,7 +249,14 @@ ssa_convert(struct ir *file)
         }
     }
     
+    struct uint_vector *phi_functions = malloc(sizeof(struct uint_vector) * variables.size);
     for (u32 var_index = 0; var_index < variables.size; ++var_index) {
+        phi_functions[var_index] = vector_init();
+    }
+    
+    // NOTE: insert phi functions
+    for (u32 var_index = 0; var_index < variables.size; ++var_index) {
+        struct instruction_t variable = variable_instructions[var_index]->data;
         if (store_blocks[var_index].size > 1) {
             struct uint_vector df = ssa_dominance_frontier(&file->cfg, &dfs, store_blocks + var_index);
             for (u32 soldier_index = 0; soldier_index < df.size; ++soldier_index) {
@@ -272,21 +275,41 @@ ssa_convert(struct ir *file)
                 };
                 
                 phi.OpPhi.result_id = file->header.bound++;
-                phi.OpPhi.result_type = variable_instructions[var_index].OpVariable.result_type;
+                phi.OpPhi.result_type = variable.OpVariable.result_type;
                 phi.OpPhi.variables = malloc(pred_count * sizeof(u32));
                 phi.OpPhi.parents = malloc(pred_count * sizeof(u32));
                 
-                prepend_instruction(file->blocks + soldier, &phi);
+                // NOTE: remember which variable this phi function resolves
+                vector_push(phi_functions + var_index, phi.OpPhi.result_id);
+                
+                struct instruction_t store = {
+                    .opcode = OpStore,
+                    .wordcount = 3
+                };
+                
+                store.OpStore.pointer = variable.OpVariable.result_id;
+                store.OpStore.object = phi.OpPhi.result_id;
+                
+                prepend_instruction(file->blocks + soldier, store);
+                prepend_instruction(file->blocks + soldier, phi);
             }
         }
     }
     
+    u32 counter;
     struct int_stack versions = stack_init();
-    u32 counter = 0;
-    u32 mapping[100] = { 0 }; // TODO: count OpStores??
+    struct uint_vector *mapping = malloc(sizeof(struct uint_vector) * variables.size);
     
     for (u32 var_index = 0; var_index < variables.size; ++var_index) {
-        struct instruction_t original_variable = variable_instructions[var_index];
-        ssa_traverse(file, &versions, &counter, &original_variable, mapping, 0);
+        mapping[var_index] = vector_init();
+    }
+    
+    for (u32 var_index = 0; var_index < variables.size; ++var_index) {
+        counter = 0;
+        if (phi_functions[var_index].size > 0) {
+            struct instruction_t original_variable = variable_instructions[var_index]->data;
+            ssa_traverse(file, &versions, &counter, &original_variable, mapping + var_index, phi_functions + var_index, var_index, 0);
+            delete_instruction(variable_instructions + var_index);
+        }
     }
 }

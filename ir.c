@@ -163,7 +163,7 @@ static void
 dump_ir(struct ir *file, const char *filename)
 {
     FILE *stream = fopen(filename, "wb");
-    u32 buffer[100];
+    u32 buffer[256];
     
     if (!file) {
         fprintf(stderr, "[ERROR] Can not write output\n");
@@ -205,7 +205,7 @@ dump_ir(struct ir *file, const char *filename)
             words = dump_instruction(&inst->data, buffer);
             fwrite(words, inst->data.wordcount * 4, 1, stream);
             inst = inst->next;
-        };
+        }
         
         struct instruction_t termination_inst;
         struct edge_list *edge = file->cfg.out[i];
@@ -267,19 +267,19 @@ delete_instruction(/*struct basic_block *block, */struct instruction_list **inst
 }
 
 static void
-prepend_instruction(struct basic_block *block, struct instruction_t *instruction)
+prepend_instruction(struct basic_block *block, struct instruction_t instruction)
 {
     struct instruction_list *first = block->instructions;
     
     if (!first) {
         first = malloc(sizeof(struct instruction_list));
-        first->data = *instruction;
+        first->data = instruction;
         first->prev = NULL;
         first->next = NULL;
         block->instructions = first;
     } else {
         block->instructions = malloc(sizeof(struct instruction_list));
-        block->instructions->data = *instruction;
+        block->instructions->data = instruction;
         block->instructions->prev = NULL;
         block->instructions->next = first;
         first->prev = block->instructions;
