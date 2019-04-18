@@ -127,17 +127,16 @@ ssa_dominance_frontier(struct ir_cfg *cfg, struct cfg_dfs_result *dfs, struct ui
 }
 
 static u32
-ssa_insert_variable(struct ir *file, u32 block_index, u32 var_index, struct uint_vector *mapping, struct instruction_t variable)
+ssa_insert_variable(struct ir *file, u32 block_index, u32 var_index, struct instruction_t variable)
 {
     u32 res_id = file->header.bound++;
     variable.OpVariable.result_id = res_id;
     prepend_instruction(file->blocks + block_index, variable); // NOTE: only a copy is inserted
-    vector_push(mapping, res_id);
     return(res_id);
 }
 
 static void
-ssa_traverse(struct ir *file, struct int_stack *versions, u32 *counter, struct instruction_t *original_variable, struct uint_vector *mapping, struct uint_vector *phi_functions, u32 var_index, u32 block_index)
+ssa_traverse(struct ir *file, struct int_stack *versions, u32 counter, struct instruction_t *original_variable, struct uint_vector *mapping, struct uint_vector *phi_functions, u32 var_index, u32 block_index)
 {
     u32 variable = original_variable->OpVariable.result_id;
     struct instruction_list *inst = file->blocks[block_index].instructions;
@@ -156,10 +155,16 @@ ssa_traverse(struct ir *file, struct int_stack *versions, u32 *counter, struct i
         // NOTE: new assignment to variable
         if (inst->data.opcode == OpStore && inst->data.OpStore.pointer == variable) {
             // TODO: get actual root block
-            u32 new_version = ssa_insert_variable(file, 0, var_index, mapping, *original_variable);
+            u32 new_version = ssa_insert_variable(file, 0, var_index, *original_variable);
+            if (counter < mapping->size) {
+                mapping->data[counter] = new_version;
+            } else {
+                vector_push(mapping, new_version);
+            }
+            
             inst->data.OpStore.pointer = new_version;
-            stack_push(versions, *counter);
-            *counter += 1;
+            stack_push(versions, counter);
+            ++counter;
         }
         
         inst = inst->next;
@@ -243,7 +248,7 @@ ssa_convert(struct ir *file)
             if (instruction->data.opcode == OpStore) {
                 u32 store_to = search_item_u32(variables.data, variables.size, 
                                                instruction->data.OpStore.pointer);
-                vector_push(store_blocks + store_to, block_index);
+                vector_push_maybe(store_blocks + store_to, block_index);
             }
             instruction = instruction->next;
         }
@@ -295,8 +300,7 @@ ssa_convert(struct ir *file)
             }
         }
     }
-    
-    u32 counter;
+#if 1
     struct int_stack versions = stack_init();
     struct uint_vector *mapping = malloc(sizeof(struct uint_vector) * variables.size);
     
@@ -305,11 +309,9 @@ ssa_convert(struct ir *file)
     }
     
     for (u32 var_index = 0; var_index < variables.size; ++var_index) {
-        counter = 0;
-        if (phi_functions[var_index].size > 0) {
-            struct instruction_t original_variable = variable_instructions[var_index]->data;
-            ssa_traverse(file, &versions, &counter, &original_variable, mapping + var_index, phi_functions + var_index, var_index, 0);
-            delete_instruction(variable_instructions + var_index);
-        }
+        struct instruction_t original_variable = variable_instructions[var_index]->data;
+        ssa_traverse(file, &versions, 0, &original_variable, mapping + var_index, phi_functions + var_index, var_index, 0);
+        delete_instruction(variable_instructions + var_index);
     }
+#endif
 }
