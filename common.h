@@ -4,6 +4,8 @@
 #include <stdbool.h>
 #include <string.h>
 
+#pragma warning(disable:4996) // fopen
+
 typedef uint64_t u64;
 typedef uint32_t u32;
 typedef uint16_t u16;

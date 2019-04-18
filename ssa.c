@@ -300,7 +300,7 @@ ssa_convert(struct ir *file)
             }
         }
     }
-#if 1
+    
     struct int_stack versions = stack_init();
     struct uint_vector *mapping = malloc(sizeof(struct uint_vector) * variables.size);
     
@@ -313,5 +313,4 @@ ssa_convert(struct ir *file)
         ssa_traverse(file, &versions, 0, &original_variable, mapping + var_index, phi_functions + var_index, var_index, 0);
         delete_instruction(variable_instructions + var_index);
     }
-#endif
 }

@@ -269,13 +269,15 @@ cfg_dfs(struct ir_cfg *cfg)
 }
 
 static struct uint_vector
-cfg_bfs_order(struct ir_cfg *cfg)
+cfg_bfs_order_(struct ir_cfg *cfg, u32 root, s32 terminate)
 {
     struct uint_vector order = vector_init();
     struct int_queue node_queue = queue_init();
-    queue_push(&node_queue, 0);
+    
+    queue_push(&node_queue, root);
     
     bool *visited = calloc(cfg->labels.size, sizeof(bool));
+    visited[root] = true;
     
     while (node_queue.size) {
         u32 node = queue_pop(&node_queue);
@@ -285,7 +287,7 @@ cfg_bfs_order(struct ir_cfg *cfg)
         
         while (edge) {
             u32 child = edge->data;
-            if (!visited[child]) {
+            if (!visited[child] && (terminate == -1 || child != (u32) terminate)) {
                 queue_push(&node_queue, child);
                 visited[child] = true;
             }
@@ -296,6 +298,18 @@ cfg_bfs_order(struct ir_cfg *cfg)
     free(visited);
     
     return(order);
+}
+
+static struct uint_vector
+cfg_bfs_order(struct ir_cfg *cfg)
+{
+    return(cfg_bfs_order_(cfg, 0, -1));
+}
+
+static struct uint_vector
+cfg_bfs_order_r(struct ir_cfg *cfg, u32 root, s32 terminate)
+{
+    return(cfg_bfs_order_(cfg, root, terminate));
 }
 
 

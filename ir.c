@@ -137,6 +137,11 @@ eat_ir(u32 *data, u32 size)
             cfg_add_edge(&file.cfg, block_number, false_edge);
         }
         
+        if (!supported_in_cfg(inst->data.opcode)) {
+            fprintf(stderr, "[ERROR] Unsupported instruction (opcode %d) in CFG\n", inst->data.opcode);
+            exit(1);
+        }
+        
         struct instruction_list *save = inst;
         inst->prev->next = NULL;
         inst->next->prev = NULL;
@@ -264,6 +269,8 @@ delete_instruction(/*struct basic_block *block, */struct instruction_list **inst
     
     *inst = NULL;
     free(vinst);
+    
+    // TODO: get block and block->count--;
 }
 
 static void
@@ -284,6 +291,8 @@ prepend_instruction(struct basic_block *block, struct instruction_t instruction)
         block->instructions->next = first;
         first->prev = block->instructions;
     }
+    
+    block->count++;
 }
 
 static void
@@ -307,6 +316,8 @@ append_instruction(struct basic_block *block, struct instruction_t instruction)
         last->next->prev = last;
         last->next->next = NULL;
     }
+    
+    block->count++;
 }
 
 static void

@@ -372,3 +372,86 @@ dump_instruction(struct instruction_t *inst, u32 *buffer)
     
     return(buffer);
 }
+
+static bool
+produces_result_id(enum opcode_t opcode)
+{
+    switch (opcode) {
+        case OpVariable:
+        case OpLoad:
+        case OpSNegate:
+        case OpFNegate:
+        case OpIAdd:
+        case OpFAdd:
+        case OpISub:
+        case OpFSub:
+        case OpIMul:
+        case OpFMul:
+        case OpUDiv:
+        case OpSDiv:
+        case OpFDiv:
+        case OpUMod:
+        case OpSRem:
+        case OpSMod:
+        case OpFRem:
+        case OpFMod:
+        case OpPhi:
+        case OpLabel: {
+            return(true);
+        }
+        
+        case OpLoopMerge:
+        case OpSelectionMerge:
+        case OpBranch:
+        case OpBranchConditional:
+        case OpReturn:
+        case OpStore: {
+            return(false);
+        }
+    }
+    
+    SHOULDNOTHAPPEN;
+}
+
+static u32
+get_result_id(struct instruction_t *instruction)
+{
+    switch (instruction->opcode) {
+        case OpVariable: {
+            return(instruction->OpVariable.result_id);
+        }
+        
+        case OpLoad: {
+            return(instruction->OpLoad.result_id);
+        }
+        
+        case OpSNegate:
+        case OpFNegate:
+        case OpIAdd:
+        case OpFAdd:
+        case OpISub:
+        case OpFSub:
+        case OpIMul:
+        case OpFMul:
+        case OpUDiv:
+        case OpSDiv:
+        case OpFDiv:
+        case OpUMod:
+        case OpSRem:
+        case OpSMod:
+        case OpFRem:
+        case OpFMod: {
+            return(instruction->binary_arithmetics.result_id);
+        }
+        
+        case OpPhi: {
+            return(instruction->OpPhi.result_id);
+        }
+        
+        case OpLabel: {
+            return(instruction->OpLabel.result_id);
+        }
+    }
+    
+    SHOULDNOTHAPPEN;
+}
