@@ -128,24 +128,29 @@ ssa_dominance_frontier(struct ir_cfg *cfg, struct cfg_dfs_result *dfs, struct ui
 
 // NOTE: variable is passed by value, we modify it here
 static u32
-ssa_insert_variable(struct ir *file, u32 block_index, struct instruction_t variable, u32 version)
+ssa_insert_variable(struct ir *file, u32 block_index, struct instruction_t *variable)
 {
     u32 res_id = file->header.bound;
     file->header.bound++;
     
-    variable.OpVariable.result_id = res_id;
+    variable->OpVariable.result_id = res_id;
     prepend_instruction(file->blocks + block_index, variable);
     
     return(res_id);
 }
 
 static void
-ssa_traverse(struct ir *file, struct int_stack *versions, u32 *counter, struct instruction_t original_variable, u32 mapping[100], u32 block_index)
+ssa_traverse(struct ir *file, struct int_stack *versions, u32 *counter, struct instruction_t *original_variable, u32 mapping[100], u32 block_index)
 {
-    u32 variable = original_variable.OpVariable.result_id;
+    u32 variable = original_variable->OpVariable.result_id;
     struct instruction_list *inst = file->blocks[block_index].instructions;
     
+    // TODO: mapping!!!
+    // TODO: insert or use version -- check it!~!!!!!!
+    
     while (inst) {
+#if 0
+        // NOTE: use of variable
         if (inst->data.opcode == OpLoad) {
             u32 pointer = inst->data.OpLoad.pointer;
             if (pointer == variable) {
@@ -154,16 +159,17 @@ ssa_traverse(struct ir *file, struct int_stack *versions, u32 *counter, struct i
                 inst->data.OpLoad.pointer = version_id;
             }
         }
-        
+#endif
+        // NOTE: new assignment to variable
         if (inst->data.opcode == OpStore && inst->data.OpStore.pointer == variable) {
-            ssa_insert_variable(file, 0 /* TODO: get actual root block */, original_variable, *counter);
+            ssa_insert_variable(file, 0 /* TODO: get actual root block */, original_variable);
             stack_push(versions, *counter);
             *counter += 1;
         }
         
         inst = inst->next;
     }
-    
+#if 0
     struct edge_list *succ_edge = file->cfg.out[block_index];
     u32 succ_order = 0;
     while (succ_edge) {
@@ -184,7 +190,7 @@ ssa_traverse(struct ir *file, struct int_stack *versions, u32 *counter, struct i
     }
     
     for (u32 i = 0; i < file->cfg.labels.size; ++i) {
-        if (file->cfg.dominators[i] == block_index) {
+        if (file->cfg.dominators[i] == (s32) block_index) {
             ssa_traverse(file, versions, counter, original_variable, mapping, i);
         }
     }
@@ -198,12 +204,14 @@ ssa_traverse(struct ir *file, struct int_stack *versions, u32 *counter, struct i
             }
         }
     }
+#endif
 }
 
 static void
 ssa_convert(struct ir *file)
 {
     struct uint_vector variables = vector_init();
+    struct instruction_t *variable_instructions = malloc(100 * sizeof(struct instruction_t)); // TODO: count variables
     struct cfg_dfs_result dfs = cfg_dfs(&file->cfg); // NOTE: need postorder for DF
     
     for (u32 i = 0; i < file->cfg.labels.size; ++i) {
@@ -214,6 +222,7 @@ ssa_convert(struct ir *file)
         while (instruction) {
             if (instruction->data.opcode == OpVariable) {
                 reading = true;
+                variable_instructions[variables.head] = instruction->data;
                 vector_push(&variables, instruction->data.OpVariable.result_id);
             } else if (reading) {
                 // NOTE: we've read all OpVariables. 
@@ -225,7 +234,6 @@ ssa_convert(struct ir *file)
     }
     
     struct uint_vector *store_blocks = malloc(variables.size * sizeof(struct uint_vector));
-    struct uint_vector *phi_locations = malloc(variables.size * sizeof(struct uint_vector));
     
     for (u32 i = 0; i < variables.size; ++i) {
         store_blocks[i] = vector_init();
@@ -247,30 +255,38 @@ ssa_convert(struct ir *file)
     
     for (u32 var_index = 0; var_index < variables.size; ++var_index) {
         if (store_blocks[var_index].size > 1) {
-            phi_locations[var_index] = ssa_dominance_frontier(&file->cfg, &dfs, store_blocks + var_index);
-        } else {
-            phi_locations[var_index] = vector_init();
+            struct uint_vector df = ssa_dominance_frontier(&file->cfg, &dfs, store_blocks + var_index);
+            for (u32 soldier_index = 0; soldier_index < df.size; ++soldier_index) {
+                u32 soldier = df.data[soldier_index];
+                struct edge_list *edge = file->cfg.in[soldier];
+                
+                u32 pred_count = 0;
+                while (edge) {
+                    ++pred_count;
+                    edge = edge->next;
+                }
+                
+                struct instruction_t phi = {
+                    .opcode = OpPhi,
+                    .wordcount = 3 + pred_count * 2 
+                };
+                
+                phi.OpPhi.result_id = file->header.bound++;
+                phi.OpPhi.result_type = variable_instructions[var_index].OpVariable.result_type;
+                phi.OpPhi.variables = malloc(pred_count * sizeof(u32));
+                phi.OpPhi.parents = malloc(pred_count * sizeof(u32));
+                
+                prepend_instruction(file->blocks + soldier, &phi);
+            }
         }
     }
-    
     
     struct int_stack versions = stack_init();
     u32 counter = 0;
     u32 mapping[100] = { 0 }; // TODO: count OpStores??
     
-    // TODO: get actual OpVariables
-    struct instruction_t original_variable;
-    original_variable.wordcount = 4;
-    original_variable.opcode = OpVariable;
-    
-    struct opvariable_t opvar = {
-        .result_type = 0,
-        .result_id = 1000,
-        .storage_class = 0
-    };
-    
-    original_variable.OpVariable = opvar;
-    
-    
-    ssa_traverse(file, &versions, &counter, original_variable, mapping, 0);
+    for (u32 var_index = 0; var_index < variables.size; ++var_index) {
+        struct instruction_t original_variable = variable_instructions[var_index];
+        ssa_traverse(file, &versions, &counter, &original_variable, mapping, 0);
+    }
 }

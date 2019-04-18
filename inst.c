@@ -117,6 +117,45 @@ struct instruction_t {
 };
 
 static bool
+supported_in_cfg(enum opcode_t opcode)
+{
+    switch (opcode) {
+        case OpVariable:
+        case OpLoad:
+        case OpStore:
+        case OpSNegate:
+        case OpFNegate:
+        case OpIAdd:
+        case OpFAdd:
+        case OpISub:
+        case OpFSub:
+        case OpIMul:
+        case OpFMul:
+        case OpUDiv:
+        case OpSDiv:
+        case OpFDiv:
+        case OpUMod:
+        case OpSRem:
+        case OpSMod:
+        case OpFRem:
+        case OpFMod:
+        case OpPhi:
+        case OpLoopMerge:
+        case OpSelectionMerge:
+        case OpLabel:
+        case OpBranch:
+        case OpBranchConditional:
+        case OpReturn: {
+            return(true);
+        }
+        
+        default: {
+            return(false);
+        }
+    }
+}
+
+static bool
 terminal(enum opcode_t opcode)
 {
     return(opcode == OpBranch || opcode == OpBranchConditional || opcode == OpReturn);
@@ -169,7 +208,7 @@ get_instruction(u32 *word)
                 instruction.OpPhi.variables[i] = *(word++);
                 instruction.OpPhi.parents[i] = *(word++);
             }
-        };
+        } break;
         
         case OpSelectionMerge: {
             instruction.OpSelectionMerge.merge_block = *(word++);
@@ -265,7 +304,10 @@ dump_instruction(struct instruction_t *inst, u32 *buffer)
         case OpPhi: {
             buffer[1] = inst->OpPhi.result_type;
             buffer[2] = inst->OpPhi.result_id;
-            // TODO: dump OpPhi
+            for (u32 i = 3 ; i < inst->wordcount; i += 2) {
+                buffer[i + 0] = inst->OpPhi.variables[(i - 3) / 2];
+                buffer[i + 1] = inst->OpPhi.parents[(i - 3) / 2];
+            }
         } break;
         
         case OpSelectionMerge: {

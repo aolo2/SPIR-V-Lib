@@ -267,19 +267,19 @@ delete_instruction(/*struct basic_block *block, */struct instruction_list **inst
 }
 
 static void
-prepend_instruction(struct basic_block *block, struct instruction_t instruction)
+prepend_instruction(struct basic_block *block, struct instruction_t *instruction)
 {
     struct instruction_list *first = block->instructions;
     
     if (!first) {
         first = malloc(sizeof(struct instruction_list));
-        first->data = instruction;
+        first->data = *instruction;
         first->prev = NULL;
         first->next = NULL;
         block->instructions = first;
     } else {
         block->instructions = malloc(sizeof(struct instruction_list));
-        block->instructions->data = instruction;
+        block->instructions->data = *instruction;
         block->instructions->prev = NULL;
         block->instructions->next = first;
         first->prev = block->instructions;
@@ -316,7 +316,9 @@ instruction_list_free(struct instruction_list *list)
     
     while (list) {
         next = list->next;
-        free(list->data.unparsed_words);
+        if (!supported_in_cfg(list->data.opcode)) { 
+            free(list->data.unparsed_words);
+        }
         free(list);
         list = next;
     }
