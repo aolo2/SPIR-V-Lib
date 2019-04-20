@@ -25,33 +25,8 @@ struct ir {
     struct instruction_list *post_cfg;
 };
 
-static u32 *
-get_binary(const char *filename, u32 *size)
-{
-    FILE *file = fopen(filename, "rb");
-    
-    if (!file) {
-        fprintf(stderr, "[ERROR] File could not be opened\n");
-        return(NULL);
-    }
-    
-    fseek(file, 0L, SEEK_END);
-    *size = ftell(file);
-    rewind(file);
-    
-    // NOTE: size % sizeof(u32) is always zero
-    u32 *buffer = (u32 *) malloc(*size);
-    fread((u8 *) buffer, *size, 1, file);
-    
-    *size /= sizeof(u32);
-    
-    fclose(file);
-    
-    return(buffer);
-}
-
-static struct ir
-eat_ir(u32 *data, u32 size)
+struct ir
+ir_eat(u32 *data, u32 size)
 {
     u32 labels[100] = { 0 };
     u32 bb_count = 0;
@@ -69,7 +44,7 @@ eat_ir(u32 *data, u32 size)
     // NOTE: get all instructions in a list, count basic blocks
     do {
         inst = malloc(sizeof(struct instruction_list));
-        inst->data = get_instruction(word);
+        inst->data = instruction_parse(word);
         inst->prev = last;
         
         if (inst->data.opcode == OpLabel) {
@@ -164,8 +139,8 @@ eat_ir(u32 *data, u32 size)
     return(file);
 }
 
-static void
-dump_ir(struct ir *file, const char *filename)
+void
+ir_dump(struct ir *file, const char *filename)
 {
     FILE *stream = fopen(filename, "wb");
     u32 buffer[256];
@@ -181,7 +156,7 @@ dump_ir(struct ir *file, const char *filename)
     u32 *words;
     
     do {
-        words = dump_instruction(&inst->data, buffer);
+        words = instruction_dump(&inst->data, buffer);
         fwrite(words, inst->data.wordcount * 4, 1, stream);
         inst = inst->next;
     } while (inst);
@@ -202,12 +177,12 @@ dump_ir(struct ir *file, const char *filename)
             .OpLabel = label_operand
         };
         
-        words = dump_instruction(&label_inst, buffer);
+        words = instruction_dump(&label_inst, buffer);
         fwrite(words, label_inst.wordcount * 4, 1, stream);
         
         inst = block.instructions;
         while (inst) {
-            words = dump_instruction(&inst->data, buffer);
+            words = instruction_dump(&inst->data, buffer);
             fwrite(words, inst->data.wordcount * 4, 1, stream);
             inst = inst->next;
         }
@@ -240,13 +215,13 @@ dump_ir(struct ir *file, const char *filename)
             ASSERT(false);
         }
         
-        words = dump_instruction(&termination_inst, buffer);
+        words = instruction_dump(&termination_inst, buffer);
         fwrite(buffer, termination_inst.wordcount * 4, 1, stream);
     }
     
     inst = file->post_cfg;
     do {
-        words = dump_instruction(&inst->data, buffer);
+        words = instruction_dump(&inst->data, buffer);
         fwrite(words, inst->data.wordcount * 4, 1, stream);
         inst = inst->next;
     } while (inst);
@@ -254,8 +229,8 @@ dump_ir(struct ir *file, const char *filename)
     fclose(stream);
 }
 
-static void
-delete_instruction(/*struct basic_block *block, */struct instruction_list **inst)
+void
+ir_delete_instruction(/*struct basic_block *block, */struct instruction_list **inst)
 {
     struct instruction_list *vinst = *inst;
     
@@ -273,8 +248,8 @@ delete_instruction(/*struct basic_block *block, */struct instruction_list **inst
     // TODO: get block and block->count--;
 }
 
-static void
-prepend_instruction(struct basic_block *block, struct instruction_t instruction)
+void
+ir_prepend_instruction(struct basic_block *block, struct instruction_t instruction)
 {
     struct instruction_list *first = block->instructions;
     
@@ -295,8 +270,8 @@ prepend_instruction(struct basic_block *block, struct instruction_t instruction)
     block->count++;
 }
 
-static void
-append_instruction(struct basic_block *block, struct instruction_t instruction)
+void
+ir_append_instruction(struct basic_block *block, struct instruction_t instruction)
 {
     struct instruction_list *last = block->instructions;
     
@@ -335,8 +310,8 @@ instruction_list_free(struct instruction_list *list)
     }
 }
 
-static void
-destroy_ir(struct ir *file)
+void
+ir_destroy(struct ir *file)
 {
     for (u32 i = 0; i < file->cfg.labels.size; ++i) {
         instruction_list_free(file->blocks[i].instructions);
@@ -349,7 +324,7 @@ destroy_ir(struct ir *file)
 }
 
 static struct basic_block *
-add_basic_block(struct ir *file)
+ir_add_bb(struct ir *file)
 {
     u32 label = file->header.bound;
     file->header.bound++;

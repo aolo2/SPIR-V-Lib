@@ -129,7 +129,7 @@ cfg_init(u32 *labels, u32 nblocks)
     return(cfg);
 }
 
-static bool
+bool
 cfg_add_edge(struct ir_cfg *cfg, u32 from, u32 to)
 {
     bool added = edge_list_push(cfg->out + from, to);
@@ -137,7 +137,7 @@ cfg_add_edge(struct ir_cfg *cfg, u32 from, u32 to)
     return(added);
 }
 
-static bool
+bool
 cfg_remove_edge(struct ir_cfg *cfg, u32 from, u32 to)
 {
     bool removed = edge_list_remove(cfg->out + from, to);
@@ -145,7 +145,7 @@ cfg_remove_edge(struct ir_cfg *cfg, u32 from, u32 to)
     return(removed);
 }
 
-static bool
+bool
 cfg_redirect_edge(struct ir_cfg *cfg, u32 from, u32 to_old, u32 to_new)
 {
     bool redirected = edge_list_replace(cfg->out[from], to_old, to_new);
@@ -166,7 +166,7 @@ cfg_add_vertex(struct ir_cfg *cfg, u32 label)
     cfg->in[cfg->labels.size - 1] = 0x00;
 }
 
-static void
+void
 cfg_remove_vertex(struct ir_cfg *cfg, u32 index)
 {
     struct edge_list *out = cfg->out[index];
@@ -185,7 +185,7 @@ cfg_remove_vertex(struct ir_cfg *cfg, u32 index)
     } while (in);
 }
 
-static void
+void
 cfg_show(struct ir_cfg *cfg) 
 {
     for (u32 i = 0; i < cfg->labels.size; ++i) {
@@ -209,7 +209,7 @@ cfg_show(struct ir_cfg *cfg)
     }
 }
 
-static struct cfg_dfs_result
+struct cfg_dfs_result
 cfg_dfs(struct ir_cfg *cfg)
 {
     u32 maxnver = cfg->labels.size;
@@ -300,13 +300,13 @@ cfg_bfs_order_(struct ir_cfg *cfg, u32 root, s32 terminate)
     return(order);
 }
 
-static struct uint_vector
+struct uint_vector
 cfg_bfs_order(struct ir_cfg *cfg)
 {
     return(cfg_bfs_order_(cfg, 0, -1));
 }
 
-static struct uint_vector
+struct uint_vector
 cfg_bfs_order_r(struct ir_cfg *cfg, u32 root, s32 terminate)
 {
     return(cfg_bfs_order_(cfg, root, terminate));
@@ -348,8 +348,7 @@ cfg_find_min(u32 *preorder, u32 *sdom, u32 *label, s32 *ancestor, u32 v)
 }
 
 // NOTE: dominators as per Lengauer-Tarjan, -1 means N/A
-// preorder contains T1 for each vertex, parent has DFS parents
-static s32 *
+s32 *
 cfg_dominators(struct ir_cfg *input, struct cfg_dfs_result *dfs)
 {
     u32 nver = input->labels.size;
@@ -421,7 +420,7 @@ cfg_dominators(struct ir_cfg *input, struct cfg_dfs_result *dfs)
     return(dom);
 }
 
-static u32
+u32
 cfg_whichpred(struct ir_cfg *cfg, u32 block_index, u32 pred_index)
 {
     struct edge_list *edge = cfg->in[block_index];

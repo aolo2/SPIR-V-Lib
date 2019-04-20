@@ -4,7 +4,9 @@
 #include <stdbool.h>
 #include <string.h>
 
+#ifdef _WIN32
 #pragma warning(disable:4996) // fopen
+#endif
 
 typedef uint64_t u64;
 typedef uint32_t u32;

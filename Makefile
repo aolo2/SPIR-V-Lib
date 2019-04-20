@@ -9,7 +9,7 @@ DEBUG_BUILD_PATH = build/debug
 CC = gcc
 # INPUT = $(DATA_DIR)/out.spv
 
-DEBUG_CFLAGS = -g -Wall -Wextra -pedantic -Wno-unused-function # -Wno-unused-variable -Wno-unused-parameter # -fsanitize=address -fsanitize=undefined -fsanitize=leak
+DEBUG_CFLAGS = -g -Wall -Wextra -pedantic -Wno-unused-function # -Wno-unused-variable -Wno-unused-parameter -fsanitize=address -fsanitize=undefined -fsanitize=leak
 
 VALGRIND_FLAGS = #--leak-check=full --show-leak-kinds=all --track-origins=yes
 

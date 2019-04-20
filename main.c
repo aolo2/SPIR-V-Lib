@@ -1,10 +1,29 @@
-#include "common.h"
+#include "headers.h"
 
-#include "inst.c"
-#include "cfg.c"
-#include "ir.c"
-#include "ssa.c"
-#include "opt.c"
+static u32 *
+get_binary(const char *filename, u32 *size)
+{
+    FILE *file = fopen(filename, "rb");
+    
+    if (!file) {
+        fprintf(stderr, "[ERROR] File could not be opened\n");
+        return(NULL);
+    }
+    
+    fseek(file, 0L, SEEK_END);
+    *size = ftell(file);
+    rewind(file);
+    
+    // NOTE: size % sizeof(u32) is always zero
+    u32 *buffer = (u32 *) malloc(*size);
+    fread((u8 *) buffer, *size, 1, file);
+    
+    *size /= sizeof(u32);
+    
+    fclose(file);
+    
+    return(buffer);
+}
 
 static bool
 is_invariant(struct uint_vector *invariant, struct uint_vector *expressions, u32 operand)
@@ -112,11 +131,12 @@ main(void)
 {
     u32 num_words;
     u32 *words = get_binary("data/cycle.frag.spv", &num_words);
-    struct ir file = eat_ir(words, num_words);
+    struct ir file = ir_eat(words, num_words);
     
     // NOTE: for any OpVariable there is only ONE OpStore (and maybe one OpLoad)
     ssa_convert(&file);
     
+#if 0
     // NOTE: Example: Loop Invariant Code Motion
     struct uint_vector bfs = cfg_bfs_order_r(&file.cfg, 1, 7);
     struct uint_vector invariant = vector_init();
@@ -153,11 +173,10 @@ main(void)
     vector_free(&bfs);
     vector_free(&invariant);
     vector_free(&expressions);
-    // =========================================
+#endif
     
-    
-    dump_ir(&file, "data/cycle2.frag.spv");
-    destroy_ir(&file);
+    ir_dump(&file, "data/cycle2.frag.spv");
+    ir_destroy(&file);
     
     return(0);
 }
