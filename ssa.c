@@ -35,14 +35,16 @@ ssa_dominance_frontier_all(struct ir_cfg *cfg, struct cfg_dfs_result *dfs)
         stack_clear(&children_stack);
         
         // NOTE: DF-local
-        struct edge_list *edge = cfg->out[vertex];
-        while (edge) {
-            u32 to = edge->data;
-            stack_push(&children_stack, to); // NOTE: used in DF-up some five lines below
-            if (cfg->dominators[to] != (s32) vertex) {
-                vector_push(df + vertex, to);
+        {
+            struct edge_list *edge = cfg->out[vertex];
+            while (edge) {
+                u32 to = edge->data;
+                stack_push(&children_stack, to); // NOTE: used in DF-up some five lines below
+                if (cfg->dominators[to] != (s32) vertex) {
+                    vector_push(df + vertex, to);
+                }
+                edge = edge->next;
             }
-            edge = edge->next;
         }
         
         visited[vertex] = true;
@@ -213,6 +215,7 @@ ssa_convert(struct ir *file)
 {
     struct uint_vector variables = vector_init();
     struct instruction_list *variable_instructions[100];
+    struct basic_block *variable_blocks[100];
     struct cfg_dfs_result dfs = cfg_dfs(&file->cfg); // NOTE: need postorder for DF
     
     for (u32 i = 0; i < file->cfg.labels.size; ++i) {
@@ -224,6 +227,7 @@ ssa_convert(struct ir *file)
             if (instruction->data.opcode == OpVariable) {
                 reading = true;
                 variable_instructions[variables.head] = instruction;
+                variable_blocks[variables.head] = file->blocks + i;
                 vector_push(&variables, instruction->data.OpVariable.result_id);
             } else if (reading) {
                 // NOTE: we've read all OpVariables. 
@@ -311,6 +315,6 @@ ssa_convert(struct ir *file)
     for (u32 var_index = 0; var_index < variables.size; ++var_index) {
         struct instruction_t original_variable = variable_instructions[var_index]->data;
         ssa_traverse(file, &versions, 0, &original_variable, mapping + var_index, phi_functions + var_index, var_index, 0);
-        ir_delete_instruction(variable_instructions + var_index);
+        ir_delete_instruction(variable_blocks[var_index], variable_instructions[var_index]);
     }
 }

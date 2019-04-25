@@ -6,6 +6,8 @@
 
 #ifdef _WIN32
 #pragma warning(disable:4996) // fopen
+#pragma warning(disable:4201) // nameless struct/union
+#pragma warning(disable:4204) // nameless non-constant aggregate initializer
 #endif
 
 typedef uint64_t u64;

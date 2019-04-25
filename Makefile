@@ -1,5 +1,3 @@
-THIS = $(HOME)/Documents/code/study/crs-vlk+
-
 APP_NAME = vlk
 
 DATA_DIR = data

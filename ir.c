@@ -34,8 +34,8 @@ ir_eat(u32 *data, u32 size)
     struct ir file;
     file.header = *((struct ir_header *) data);
     
-    struct instruction_list *all_instructions;
-    struct instruction_list *inst;
+    struct instruction_list *all_instructions = NULL;
+    struct instruction_list *inst = NULL;
     struct instruction_list *last = NULL;
     
     u32 offset = sizeof(struct ir_header) / 4;
@@ -230,22 +230,23 @@ ir_dump(struct ir *file, const char *filename)
 }
 
 void
-ir_delete_instruction(/*struct basic_block *block, */struct instruction_list **inst)
+ir_delete_instruction(struct basic_block *block, struct instruction_list *inst)
 {
-    struct instruction_list *vinst = *inst;
-    
-    if (vinst->prev) {
-        vinst->prev->next = vinst->next;
+    if (inst->prev) {
+        inst->prev->next = inst->next;
     }
     
-    if (vinst->next) {
-        vinst->next->prev = vinst->prev;
+    if (inst->next) {
+        inst->next->prev = inst->prev;
     }
     
-    *inst = NULL;
-    free(vinst);
+    if (block->instructions == inst) {
+        block->instructions = NULL;
+    }
     
-    // TODO: get block and block->count--;
+    free(inst);
+    
+    block->count -= 1;
 }
 
 void
@@ -282,9 +283,9 @@ ir_append_instruction(struct basic_block *block, struct instruction_t instructio
         last->next = NULL;
         block->instructions = last;
     } else {
-        do {
+        while (last->next) {
             last = last->next;
-        } while (last->next);
+        }
         
         last->next = malloc(sizeof(struct instruction_list));
         last->next->data = instruction;
@@ -323,7 +324,7 @@ ir_destroy(struct ir *file)
     instruction_list_free(file->post_cfg);
 }
 
-static struct basic_block *
+static u32
 ir_add_bb(struct ir *file)
 {
     u32 label = file->header.bound;
@@ -339,5 +340,5 @@ ir_add_bb(struct ir *file)
     file->blocks = realloc(file->blocks, file->cfg.labels.size * sizeof(struct basic_block));
     file->blocks[file->cfg.labels.size - 1] = new_block;
     
-    return(file->blocks + file->cfg.labels.size - 1);
+    return(file->cfg.labels.size - 1);
 }

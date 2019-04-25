@@ -9,10 +9,11 @@
 /******************INSTRUCTION  MANIPULATION******************/
 /*************************************************************/
 
+
 /*
 
 NOTE: one should refer themselves to the inst.h header, in which
- all supported instructions and their repspective structure are
+ all supported instructions and their repspective structures are
  presented.
  
  If one whishes to expand the supported instructure set, the following
@@ -53,7 +54,7 @@ ir_dump(struct ir *file, const char *filename);
 
 // NOTE: delete instruction from (either from a basic block or from pre- or post-cfg)
 void 
-ir_delete_instruction(struct instruction_list **inst);
+ir_delete_instruction(struct basic_block *block, struct instruction_list *inst);
 
 // NOTE: copy and insert the instruction before the first instruction of the given basic block
 void 
@@ -64,8 +65,9 @@ ir_prepend_instruction(struct basic_block *block, struct instruction_t instructi
 void 
 ir_append_instruction(struct basic_block *block, struct instruction_t instruction);
 
-// to the created basic block. It's label can be read from TODO: the 'label' field
-struct basic_block * 
+// NOTE: add a new basic block to the CFG. Returns the index of the created basic block. 
+// Its label can be read from cfg.labels[index]
+static u32
 ir_add_bb(struct ir *file);
 
 // NOTE: free resources allocated by the intermideate represenation. After this procedure 
@@ -134,7 +136,12 @@ struct uint_vector
 cfg_bfs_order_r(struct ir_cfg *cfg, u32 root, s32 terminate);
 
 // NOTE: computes immediate dominators as per Lengauer-Tarjan, -1 means N/A,
-// and is explicitly written to dominators[0]
+// and is explicitly written to dominators[0]. IMPORTANT: one should recompute
+// the CFG's dominators after performing vertex and/or edge manipulations, i.e.
+//
+// dfs = cfg_dfs(&file.cfg);
+// file.dominators = cfg_dominators(&file.cfg, &dfs)
+//
 s32 *
 cfg_dominators(struct ir_cfg *input, struct cfg_dfs_result *dfs);
 
