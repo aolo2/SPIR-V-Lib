@@ -295,6 +295,7 @@ cfg_bfs_order_(struct ir_cfg *cfg, u32 root, s32 terminate)
         }
     }
     
+    queue_free(&node_queue);
     free(visited);
     
     return(order);

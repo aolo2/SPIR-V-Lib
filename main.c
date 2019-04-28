@@ -166,7 +166,7 @@ s32
 main(void)
 {
     u32 num_words;
-    u32 *words = get_binary("data/cycle_noif.frag.spv", &num_words);
+    u32 *words = get_binary("data/cycle.frag.spv", &num_words);
     struct ir file = ir_eat(words, num_words);
     
     // NOTE: for any OpVariable there is only ONE OpStore (and maybe one OpLoad)
@@ -176,8 +176,6 @@ main(void)
     struct uint_vector bfs = cfg_bfs_order_r(&file.cfg, 1, 7);
     struct uint_vector expressions = vector_init();
     struct instruction_t instructions[128];
-    
-    // TODO: intermideate results are not pushed to invariant
     
     // NOTE: collect 'expressions' from cycle
     for (u32 block_index = 0; block_index < bfs.size; ++block_index) {
@@ -220,7 +218,6 @@ main(void)
         }
     }
     
-#if 1
     if (invariant_operands.size > 0) {
         u32 header_index = bfs.data[0];
         u32 preheader_index = ir_add_bb(&file);
@@ -228,9 +225,9 @@ main(void)
         
         for (u32 i = 0; i < invariant_operands.size; ++i) {
             bool cond1 = dom_uses(&file, &bfs, blocks.data[i]);
-            bool cond2 = dom_exits(&file, &bfs, blocks.data[i]);
+            //bool cond2 = dom_exits(&file, &bfs, blocks.data[i]);
             
-            if (cond1 && true /*cond2*/) {
+            if (cond1) {
                 struct basic_block *block = file.blocks + blocks.data[i];
                 ir_append_instruction(preheader, invariant[i]->data);
                 ir_delete_instruction(block, invariant[i]);
@@ -255,7 +252,6 @@ main(void)
         // NOTE: make an edge from preheader to header
         cfg_add_edge(&file.cfg, preheader_index, header_index);
     }
-#endif 
     
     vector_free(&invariant_operands);
     vector_free(&bfs);
@@ -263,7 +259,7 @@ main(void)
     vector_free(&blocks);
     // NOTE: end of example
     
-    ir_dump(&file, "data/cycle_noif2.frag.spv");
+    ir_dump(&file, "data/cycle2.frag.spv");
     ir_destroy(&file);
     
     return(0);

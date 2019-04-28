@@ -315,6 +315,30 @@ ssa_convert(struct ir *file)
     for (u32 var_index = 0; var_index < variables.size; ++var_index) {
         struct instruction_t original_variable = variable_instructions[var_index]->data;
         ssa_traverse(file, &versions, 0, &original_variable, mapping + var_index, phi_functions + var_index, var_index, 0);
-        ir_delete_instruction(variable_blocks[var_index], variable_instructions[var_index]);
+        //ir_delete_instruction(variable_blocks[var_index], variable_instructions[var_index]);
     }
 }
+
+// TODO: new clean and shiny SSA form
+
+/* 
+Instead of inserting a new OpVariable for each new OpStore - we
+insert an OpCopyObject.
+
+No need for OpLoad as OpCopyObject combines OpStore and OpLoad.
+
+So:
+
+- replacing the use of variable is now this:
+1. we find an OpLoad of variable
+2. we get the appropriate version (it's just a result_id of an OpCopyObject inserted earlier)
+3. we find where the OpLoad is used and replace the OpLoad's result_id use with OpCopyObject's result_id
+4. we DELETE THE OPLOAD
+
+- new assignment to variable is now this:
+1. do teh version calculation as before
+2. replace OpStore with OpCopyObject
+
+- OpPhi operand replacement stays the same?
+
+*/

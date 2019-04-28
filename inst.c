@@ -7,6 +7,7 @@ supported_in_cfg(enum opcode_t opcode)
         case OpVariable:
         case OpLoad:
         case OpStore:
+        case OpCopyObject:
         case OpSNegate:
         case OpFNegate:
         case OpIAdd:
@@ -111,6 +112,12 @@ instruction_parse(u32 *word)
             if (instruction.wordcount == 4) {
                 instruction.OpStore.memory_access = *(word++);
             }
+        } break;
+        
+        case OpCopyObject: {
+            instruction.OpCopyObject.result_type = *(word++);
+            instruction.OpCopyObject.result_id = *(word++);
+            instruction.OpCopyObject.operand = *(word++);
         } break;
         
         case OpLoad: {
@@ -222,6 +229,12 @@ instruction_dump(struct instruction_t *inst, u32 *buffer)
             }
         } break;
         
+        case OpCopyObject: {
+            buffer[1] = inst->OpCopyObject.result_type;
+            buffer[2] = inst->OpCopyObject.result_id;
+            buffer[3] = inst->OpCopyObject.operand;
+        } break;
+        
         case OpSNegate: 
         case OpFNegate: {
             buffer[1] = inst->unary_arithmetics.result_type;
@@ -263,6 +276,7 @@ produces_result_id(enum opcode_t opcode)
     switch (opcode) {
         case OpVariable:
         case OpLoad:
+        case OpCopyObject:
         case OpSNegate:
         case OpFNegate:
         case OpIAdd:
@@ -301,13 +315,9 @@ static u32
 get_result_id(struct instruction_t *instruction)
 {
     switch (instruction->opcode) {
-        case OpVariable: {
-            return(instruction->OpVariable.result_id);
-        }
-        
-        case OpLoad: {
-            return(instruction->OpLoad.result_id);
-        }
+        case OpVariable: return(instruction->OpVariable.result_id);
+        case OpLoad: return(instruction->OpLoad.result_id);
+        case OpCopyObject: return(instruction->OpCopyObject.result_id);
         
         case OpSNegate:
         case OpFNegate:

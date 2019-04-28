@@ -5,6 +5,7 @@ enum opcode_t {
     OpVariable = 59,
     OpLoad = 61,
     OpStore = 62,
+    OpCopyObject = 83,
     OpSNegate = 126,
     OpFNegate = 127,
     OpIAdd = 128,
@@ -83,6 +84,12 @@ struct opload_t {
     u32 memory_access; // optional
 };
 
+struct opcopyobject_t {
+    u32 result_type;
+    u32 result_id;
+    u32 operand;
+};
+
 struct unary_arithmetics_layout {
     u32 result_type;
     u32 result_id;
@@ -111,6 +118,7 @@ struct instruction_t {
         struct oploopmerge_t OpLoopMerge;
         struct opstore_t OpStore;
         struct opload_t OpLoad;
+        struct opcopyobject_t OpCopyObject;
         struct unary_arithmetics_layout unary_arithmetics;
         struct binary_arithmetics_layout binary_arithmetics;
     };
