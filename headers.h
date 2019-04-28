@@ -66,8 +66,7 @@ void
 ir_append_instruction(struct basic_block *block, struct instruction_t instruction);
 
 // NOTE: add a new basic block to the CFG. Returns the index of the created basic block. 
-// Its label can be read from cfg.labels[index]
-static u32
+u32
 ir_add_bb(struct ir *file);
 
 // NOTE: free resources allocated by the intermideate represenation. After this procedure 

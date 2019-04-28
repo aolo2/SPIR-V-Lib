@@ -2,6 +2,12 @@ static const u32 WORDCOUNT_MASK     = 0xFFFF0000;
 static const u32 OPCODE_MASK        = 0x0000FFFF;
 
 enum opcode_t {
+    OpSourceContinued = 2, // enum only, is not parsed
+    OpSource = 3,          // enum only, is not parsed
+    OpSourceExtension = 4, // enum only, is not parsed
+    OpName = 5,
+    OpString = 7,          // enum only, is not parsed
+    OpExecutionMode = 16,  // enum only, is not parsed
     OpVariable = 59,
     OpLoad = 61,
     OpStore = 62,
@@ -29,6 +35,11 @@ enum opcode_t {
     OpBranch = 249,
     OpBranchConditional = 250,
     OpReturn = 253,
+};
+
+struct opname_t {
+    u32 target_id;
+    char *name;
 };
 
 struct oplabel_t {
@@ -109,6 +120,7 @@ struct instruction_t {
     u32 *unparsed_words;
     
     union {
+        struct opname_t OpName;
         struct oplabel_t OpLabel;
         struct opvariable_t OpVariable;
         struct opbranch_t OpBranch;

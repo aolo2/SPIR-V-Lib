@@ -172,6 +172,7 @@ main(void)
     // NOTE: for any OpVariable there is only ONE OpStore (and maybe one OpLoad)
     ssa_convert(&file);
     
+#if 0
     // NOTE: example - Loop Invariant Code Motion
     struct uint_vector bfs = cfg_bfs_order_r(&file.cfg, 1, 7);
     struct uint_vector expressions = vector_init();
@@ -258,6 +259,7 @@ main(void)
     vector_free(&expressions);
     vector_free(&blocks);
     // NOTE: end of example
+#endif
     
     ir_dump(&file, "data/cycle2.frag.spv");
     ir_destroy(&file);

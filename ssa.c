@@ -128,6 +128,7 @@ ssa_dominance_frontier(struct ir_cfg *cfg, struct cfg_dfs_result *dfs, struct ui
     return(dfp);
 }
 
+#if 0
 static u32
 ssa_insert_variable(struct ir *file, u32 block_index, struct instruction_t variable)
 {
@@ -136,9 +137,24 @@ ssa_insert_variable(struct ir *file, u32 block_index, struct instruction_t varia
     ir_prepend_instruction(file->blocks + block_index, variable); // NOTE: only a copy is inserted
     return(res_id);
 }
+#endif
 
 static void
-ssa_traverse(struct ir *file, struct int_stack *versions, u32 counter, struct instruction_t *original_variable, struct uint_vector *mapping, struct uint_vector *phi_functions, u32 var_index, u32 block_index)
+ssa_delete_variable(struct ir *file, u32 id, struct basic_block *block, 
+                    struct instruction_list *instruction)
+{
+    ir_delete_opname(file, id);
+    // TODO: deletes things it shouldn't
+    ir_delete_instruction(block, instruction);
+}
+
+// TODO: save/read
+const u32 TYPE_INT = 6;
+
+static void
+ssa_traverse(struct ir *file, struct int_stack *versions, u32 counter, 
+             struct instruction_t *original_variable, struct uint_vector *mapping,
+             struct uint_vector *phi_functions, u32 var_index, u32 block_index)
 {
     u32 variable = original_variable->OpVariable.result_id;
     struct instruction_list *inst = file->blocks[block_index].instructions;
@@ -146,27 +162,46 @@ ssa_traverse(struct ir *file, struct int_stack *versions, u32 counter, struct in
     while (inst) {
         // NOTE: use of variable
         if (inst->data.opcode == OpLoad) {
-            u32 pointer = inst->data.OpLoad.pointer;
-            if (pointer == variable) {
+            if (inst->data.OpLoad.pointer == variable) {
+                inst->data.opcode = OpCopyObject;
+                inst->data.wordcount = 4;
+                // NOTE(genious): we REPLACE the OpLoad with OpCopyObject, but
+                // PRESERVE the result id. This automatically resolves all 
+                // references to this OpLoad!
+                inst->data.OpCopyObject.result_type = TYPE_INT; //TODO: actual type inst->data.OpLoad.result_type;
+                inst->data.OpCopyObject.result_id = inst->data.OpLoad.result_id;
+                
                 u32 version = stack_top(versions);
                 u32 version_id = mapping->data[version];
-                inst->data.OpLoad.pointer = version_id;
+                inst->data.OpCopyObject.operand = version_id;
             }
         }
         
-        // NOTE: new assignment to variable
-        if (inst->data.opcode == OpStore && inst->data.OpStore.pointer == variable) {
-            // TODO: get actual root block
-            u32 new_version = ssa_insert_variable(file, 0, *original_variable);
-            if (counter < mapping->size) {
-                mapping->data[counter] = new_version;
-            } else {
-                vector_push(mapping, new_version);
+        // NOTE: new assignment to variable. Replace with OpCopyObject once again
+        // TODO(longterm): copy propogation
+        if (inst->data.opcode == OpStore) {
+            if (inst->data.OpStore.pointer == variable) {
+                u32 new_version = file->header.bound++;
+                u32 object = inst->data.OpStore.object; 
+                
+                char var_name[6] = { 's', 's', 'a', '0' + (u8) var_index, 0x00 };
+                ir_add_opname(file, new_version, var_name);
+                
+                if (counter < mapping->size) {
+                    mapping->data[counter] = new_version;
+                } else {
+                    vector_push(mapping, new_version);
+                }
+                
+                inst->data.opcode = OpCopyObject;
+                inst->data.wordcount = 4;
+                inst->data.OpCopyObject.result_type = TYPE_INT;  // TODO: actual type
+                inst->data.OpCopyObject.result_id = new_version; 
+                inst->data.OpCopyObject.operand = object;
+                
+                stack_push(versions, counter);
+                ++counter;
             }
-            
-            inst->data.OpStore.pointer = new_version;
-            stack_push(versions, counter);
-            ++counter;
         }
         
         inst = inst->next;
@@ -284,7 +319,7 @@ ssa_convert(struct ir *file)
                 };
                 
                 phi.OpPhi.result_id = file->header.bound++;
-                phi.OpPhi.result_type = variable.OpVariable.result_type;
+                phi.OpPhi.result_type = TYPE_INT; //TODO: actual type variable.OpVariable.result_type;
                 phi.OpPhi.variables = malloc(pred_count * sizeof(u32));
                 phi.OpPhi.parents = malloc(pred_count * sizeof(u32));
                 
@@ -305,6 +340,7 @@ ssa_convert(struct ir *file)
         }
     }
     
+    // NOTE: insert/rename SSA variables
     struct int_stack versions = stack_init();
     struct uint_vector *mapping = malloc(sizeof(struct uint_vector) * variables.size);
     
@@ -314,31 +350,9 @@ ssa_convert(struct ir *file)
     
     for (u32 var_index = 0; var_index < variables.size; ++var_index) {
         struct instruction_t original_variable = variable_instructions[var_index]->data;
-        ssa_traverse(file, &versions, 0, &original_variable, mapping + var_index, phi_functions + var_index, var_index, 0);
-        //ir_delete_instruction(variable_blocks[var_index], variable_instructions[var_index]);
+        ssa_traverse(file, &versions, 0, &original_variable, mapping + var_index, 
+                     phi_functions + var_index, var_index, 0);
+        ssa_delete_variable(file, original_variable.OpVariable.result_id, 
+                            variable_blocks[var_index], variable_instructions[var_index]);
     }
 }
-
-// TODO: new clean and shiny SSA form
-
-/* 
-Instead of inserting a new OpVariable for each new OpStore - we
-insert an OpCopyObject.
-
-No need for OpLoad as OpCopyObject combines OpStore and OpLoad.
-
-So:
-
-- replacing the use of variable is now this:
-1. we find an OpLoad of variable
-2. we get the appropriate version (it's just a result_id of an OpCopyObject inserted earlier)
-3. we find where the OpLoad is used and replace the OpLoad's result_id use with OpCopyObject's result_id
-4. we DELETE THE OPLOAD
-
-- new assignment to variable is now this:
-1. do teh version calculation as before
-2. replace OpStore with OpCopyObject
-
-- OpPhi operand replacement stays the same?
-
-*/

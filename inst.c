@@ -61,6 +61,11 @@ instruction_parse(u32 *word)
         case OpReturn: {
         } break;
         
+        case OpName: {
+            instruction.OpName.target_id = *(word++);
+            instruction.OpName.name = (char *) word;
+        } break;
+        
         case OpLabel: {
             instruction.OpLabel.result_id = *word;
         } break;
@@ -167,6 +172,11 @@ instruction_dump(struct instruction_t *inst, u32 *buffer)
     
     switch (inst->opcode) {
         case OpReturn: {
+        } break;
+        
+        case OpName: {
+            buffer[1] = inst->OpName.target_id;
+            memcpy(buffer + 2, inst->OpName.name, (inst->wordcount - 2) * 4);
         } break;
         
         case OpLabel: {

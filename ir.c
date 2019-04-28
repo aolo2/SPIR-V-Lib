@@ -241,7 +241,7 @@ ir_delete_instruction(struct basic_block *block, struct instruction_list *inst)
     }
     
     if (block->instructions == inst) {
-        block->instructions = NULL;
+        block->instructions = inst->next;
     }
     
     free(inst);
@@ -303,9 +303,18 @@ instruction_list_free(struct instruction_list *list)
     
     while (list) {
         next = list->next;
+        
+#if 0
+        // TODO: clean up instruction destuctors
+        if (list->data.opcode == OpName) {
+            free(list->data.OpName.name);
+        }
+#endif
+        
         if (!supported_in_cfg(list->data.opcode)) { 
             free(list->data.unparsed_words);
         }
+        
         free(list);
         list = next;
     }
@@ -324,7 +333,7 @@ ir_destroy(struct ir *file)
     instruction_list_free(file->post_cfg);
 }
 
-static u32
+u32
 ir_add_bb(struct ir *file)
 {
     u32 label = file->header.bound;
@@ -341,4 +350,61 @@ ir_add_bb(struct ir *file)
     file->blocks[file->cfg.labels.size - 1] = new_block;
     
     return(file->cfg.labels.size - 1);
+}
+
+void
+ir_add_opname(struct ir *file, u32 target_id, char *name)
+{
+    struct instruction_list *inst = file->pre_cfg;
+    while (inst) {
+        if (inst->data.opcode == OpExecutionMode) {
+            u32 next_opcode = inst->next->data.opcode;
+            
+            while (next_opcode >= OpSourceContinued && next_opcode <= OpName) {
+                inst = inst->next;
+                next_opcode = inst->next->data.opcode;
+            }
+            
+            struct instruction_list *newinst = malloc(sizeof(struct instruction_list));
+            
+            newinst->next = inst->next;
+            newinst->prev = inst;
+            
+            if (inst->next) {
+                inst->next->prev = newinst;
+            }
+            
+            newinst->data.opcode = OpName;
+            newinst->data.unparsed_words = NULL;
+            newinst->data.OpName.target_id = target_id;
+            newinst->data.OpName.name = strdup(name);
+            
+            u32 literal_len = (u32) strlen(name) + 1;
+            newinst->data.wordcount = 2 + literal_len / 4 + 1;
+            
+            inst->next = newinst;
+        }
+        
+        inst = inst->next;
+    }
+}
+
+void 
+ir_delete_opname(struct ir *file, u32 target_id)
+{
+    struct instruction_list *inst = file->pre_cfg;
+    while (inst) {
+        if (inst->data.opcode == OpName) {
+            if (inst->data.OpName.target_id == target_id) {
+                // NOTE: we know that OpName can not be the first instrction
+                inst->prev->next = inst->next;
+                if (inst->next) {
+                    inst->next->prev = inst->prev;
+                }
+                free(inst);
+                break;
+            }
+        }
+        inst = inst->next;
+    }
 }
