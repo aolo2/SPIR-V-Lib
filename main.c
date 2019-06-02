@@ -166,7 +166,7 @@ s32
 main(void)
 {
     u32 num_words;
-    u32 *words = get_binary("data/cycle.frag.spv", &num_words);
+    u32 *words = get_binary("data/sample2.frag.spv", &num_words);
     struct ir file = ir_eat(words, num_words);
     
     // NOTE: for any OpVariable there is only ONE OpStore (and maybe one OpLoad)
@@ -261,7 +261,7 @@ main(void)
     // NOTE: end of example
 #endif
     
-    ir_dump(&file, "data/cycle2.frag.spv");
+    ir_dump(&file, "data/sample2.frag.spv.opt");
     ir_destroy(&file);
     
     return(0);

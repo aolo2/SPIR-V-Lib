@@ -143,9 +143,13 @@ static void
 ssa_delete_variable(struct ir *file, u32 id, struct basic_block *block, 
                     struct instruction_list *instruction)
 {
-    ir_delete_opname(file, id);
-    // TODO: deletes things it shouldn't
-    ir_delete_instruction(block, instruction);
+    if (block) {
+    	ir_delete_opname(file, id);
+    	// TODO: deletes things it shouldn't
+    	ir_delete_instruction(block, instruction);
+     } else {
+     	// TODO: delete pre_cfg OpVariable and OpName
+     }
 }
 
 // TODO: save/read
@@ -252,7 +256,22 @@ ssa_convert(struct ir *file)
     struct instruction_list *variable_instructions[100];
     struct basic_block *variable_blocks[100];
     struct cfg_dfs_result dfs = cfg_dfs(&file->cfg); // NOTE: need postorder for DF
-    
+ 
+    // TODO: consider that Input variables are readonly!
+	
+    // NOTE: find all OpVariables   
+    {
+	    struct instruction_list *instruction = file->pre_cfg;
+	    while (instruction) {
+		if (instruction->data.opcode == OpVariable) {
+		    variable_instructions[variables.head] = instruction;
+		    variable_blocks[variables.head] = NULL;
+		    vector_push(&variables, instruction->data.OpVariable.result_id);
+		}
+                instruction = instruction->next;
+	    }
+    }
+
     for (u32 i = 0; i < file->cfg.labels.size; ++i) {
         struct basic_block *block = file->blocks + i;
         struct instruction_list *instruction = block->instructions;
@@ -273,12 +292,14 @@ ssa_convert(struct ir *file)
         }
     }
     
+    
     struct uint_vector *store_blocks = malloc(variables.size * sizeof(struct uint_vector));
     
     for (u32 i = 0; i < variables.size; ++i) {
         store_blocks[i] = vector_init();
     }
     
+    // NOTE: find all OpStores to found OpVariables
     for (u32 block_index = 0; block_index < file->cfg.labels.size; ++block_index) {
         struct basic_block *block = file->blocks + block_index;
         struct instruction_list *instruction = block->instructions;
@@ -326,6 +347,7 @@ ssa_convert(struct ir *file)
                 // NOTE: remember which variable this phi function resolves
                 vector_push(phi_functions + var_index, phi.OpPhi.result_id);
                 
+		// NOTE: insert OpStore to later be replaced with OpCopyObject
                 struct instruction_t store = {
                     .opcode = OpStore,
                     .wordcount = 3
@@ -346,6 +368,10 @@ ssa_convert(struct ir *file)
     
     for (u32 var_index = 0; var_index < variables.size; ++var_index) {
         mapping[var_index] = vector_init();
+        // TODO: move storage class to enum
+        if (variable_blocks[var_index] == NULL && variable_instructions[var_index]->data.OpVariable.storage_class == 1) {
+            vector_push(mapping + var_index, variables.data[var_index]);
+        }
     }
     
     for (u32 var_index = 0; var_index < variables.size; ++var_index) {

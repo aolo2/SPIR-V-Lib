@@ -4,7 +4,7 @@ DATA_DIR = data
 RELEASE_BUILD_PATH = build/release
 DEBUG_BUILD_PATH = build/debug
 
-CC = tcc
+CC = gcc
 # INPUT = $(DATA_DIR)/out.spv
 
 DEBUG_CFLAGS = -g -Wall -Wextra -pedantic -Wno-unused-function # -Wno-unused-variable -Wno-unused-parameter -fsanitize=address -fsanitize=undefined -fsanitize=leak
