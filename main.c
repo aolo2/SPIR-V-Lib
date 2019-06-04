@@ -35,7 +35,7 @@ main(void)
     // NOTE: for any OpVariable there is only ONE OpStore (and maybe one OpLoad)
     ssa_convert(&file);
     
-    ir_dump(&file, "data/sample.frag.spv.opt");
+    ir_dump(&file, "../thesis/shaders/sample.frag.spv");
     ir_destroy(&file);
     
     return(0);

@@ -160,6 +160,7 @@ ssa_traverse(struct ir *file, struct int_stack *versions, u32 counter, u32 data_
     u32 edge_count = 0;
     u32 variable = original_variable->OpVariable.result_id;
     bool is_termination_block = false;
+    bool first_load = true;
     struct instruction_list *inst = file->blocks[block_index].instructions;
     struct edge_list *edge = file->cfg.out[block_index];
     
@@ -174,17 +175,23 @@ ssa_traverse(struct ir *file, struct int_stack *versions, u32 counter, u32 data_
         // NOTE: use of variable
         if (inst->data.opcode == OpLoad) {
             if (inst->data.OpLoad.pointer == variable) {
-                inst->data.opcode = OpCopyObject;
-                inst->data.wordcount = 4;
-                // NOTE(genious): we REPLACE the OpLoad with OpCopyObject, but
-                // PRESERVE the result id. This automatically resolves all 
-                // references to this OpLoad!
-                inst->data.OpCopyObject.result_type = data_type;
-                inst->data.OpCopyObject.result_id = inst->data.OpLoad.result_id;
-                
-                u32 version = stack_top(versions);
-                u32 version_id = mapping->data[version];
-                inst->data.OpCopyObject.operand = version_id;
+                if (block_index == 0 && original_variable->OpVariable.storage_class == 1 && first_load) {
+                    // NOTE: if this is the FIRST OpLoad of an Input class variable in the entry block
+                    // then preserve the instruction
+                    first_load = false;
+                } else {
+                    inst->data.opcode = OpCopyObject;
+                    inst->data.wordcount = 4;
+                    // NOTE(genious): we REPLACE the OpLoad with OpCopyObject, but
+                    // PRESERVE the result id. This automatically resolves all 
+                    // references to this OpLoad!
+                    inst->data.OpCopyObject.result_type = data_type;
+                    inst->data.OpCopyObject.result_id = inst->data.OpLoad.result_id;
+                    
+                    u32 version = stack_top(versions);
+                    u32 version_id = mapping->data[version];
+                    inst->data.OpCopyObject.operand = version_id;
+                }
             }
         }
         
@@ -217,13 +224,6 @@ ssa_traverse(struct ir *file, struct int_stack *versions, u32 counter, u32 data_
         
         inst = inst->next;
     }
-    
-    // TODO: if this is a first use of an Input class variable, we need to 
-    // insert one *special* OpLoad, to get the pointer data
-    {
-        
-    }
-    
     
     // NOTE: if this is a termination block, we need to insert one *special* OpStore
     // and preserve it. It's an OpStore to the Output class variable
