@@ -147,21 +147,28 @@ ssa_delete_variable(struct ir *file, u32 id, struct basic_block *block,
     	ir_delete_opname(file, id);
     	// TODO: deletes things it shouldn't
     	ir_delete_instruction(block, instruction);
-     } else {
-     	// TODO: delete pre_cfg OpVariable and OpName
-     }
+    } else {
+        // TODO: delete pre_cfg OpVariable and OpName, but not Output class!!!
+    }
 }
 
-// TODO: save/read
-const u32 TYPE_INT = 6;
-
 static void
-ssa_traverse(struct ir *file, struct int_stack *versions, u32 counter, 
+ssa_traverse(struct ir *file, struct int_stack *versions, u32 counter, u32 data_type,
              struct instruction_t *original_variable, struct uint_vector *mapping,
              struct uint_vector *phi_functions, u32 var_index, u32 block_index)
 {
+    u32 edge_count = 0;
     u32 variable = original_variable->OpVariable.result_id;
+    bool is_termination_block = false;
     struct instruction_list *inst = file->blocks[block_index].instructions;
+    struct edge_list *edge = file->cfg.out[block_index];
+    
+    while (edge) {
+        ++edge_count;
+        edge = edge->next;
+    }
+    
+    is_termination_block = (edge_count == 0);
     
     while (inst) {
         // NOTE: use of variable
@@ -172,7 +179,7 @@ ssa_traverse(struct ir *file, struct int_stack *versions, u32 counter,
                 // NOTE(genious): we REPLACE the OpLoad with OpCopyObject, but
                 // PRESERVE the result id. This automatically resolves all 
                 // references to this OpLoad!
-                inst->data.OpCopyObject.result_type = TYPE_INT; //TODO: actual type inst->data.OpLoad.result_type;
+                inst->data.OpCopyObject.result_type = data_type;
                 inst->data.OpCopyObject.result_id = inst->data.OpLoad.result_id;
                 
                 u32 version = stack_top(versions);
@@ -199,7 +206,7 @@ ssa_traverse(struct ir *file, struct int_stack *versions, u32 counter,
                 
                 inst->data.opcode = OpCopyObject;
                 inst->data.wordcount = 4;
-                inst->data.OpCopyObject.result_type = TYPE_INT;  // TODO: actual type
+                inst->data.OpCopyObject.result_type = data_type;
                 inst->data.OpCopyObject.result_id = new_version; 
                 inst->data.OpCopyObject.operand = object;
                 
@@ -209,6 +216,27 @@ ssa_traverse(struct ir *file, struct int_stack *versions, u32 counter,
         }
         
         inst = inst->next;
+    }
+    
+    // TODO: if this is a first use of an Input class variable, we need to 
+    // insert one *special* OpLoad, to get the pointer data
+    {
+        
+    }
+    
+    
+    // NOTE: if this is a termination block, we need to insert one *special* OpStore
+    // and preserve it. It's an OpStore to the Output class variable
+    if (is_termination_block && original_variable->OpVariable.storage_class == 3) {
+        struct instruction_t store;
+        store.opcode = OpStore;
+        store.wordcount = 3;
+        store.unparsed_words = NULL;
+        
+        store.OpStore.pointer = original_variable->OpVariable.result_id;
+        store.OpStore.object = mapping->data[counter - 1];
+        
+        ir_append_instruction(file->blocks + block_index, store);
     }
     
     struct edge_list *succ_edge = file->cfg.out[block_index];
@@ -234,7 +262,7 @@ ssa_traverse(struct ir *file, struct int_stack *versions, u32 counter,
     
     for (u32 i = 0; i < file->cfg.labels.size; ++i) {
         if (file->cfg.dominators[i] == (s32) block_index) {
-            ssa_traverse(file, versions, counter, original_variable, mapping, phi_functions, var_index, i);
+            ssa_traverse(file, versions, counter, data_type, original_variable, mapping, phi_functions, var_index, i);
         }
     }
     
@@ -249,29 +277,48 @@ ssa_traverse(struct ir *file, struct int_stack *versions, u32 counter,
     }
 }
 
+static u32
+get_variable_type(struct ir *file, u32 pointer_type)
+{
+    struct instruction_list *inst = file->pre_cfg;
+    while (inst) {
+        if (inst->data.opcode == OpTypePointer) {
+            if (inst->data.OpTypePointer.result_id == pointer_type) {
+                return(inst->data.OpTypePointer.type);
+            }
+        }
+        inst = inst->next;
+    }
+    
+    SHOULDNOTHAPPEN;
+}
+
 void
 ssa_convert(struct ir *file)
 {
     struct uint_vector variables = vector_init();
+    
+    // TODO: count and malloc
     struct instruction_list *variable_instructions[100];
     struct basic_block *variable_blocks[100];
+    u32 variable_types[100];
+    
     struct cfg_dfs_result dfs = cfg_dfs(&file->cfg); // NOTE: need postorder for DF
- 
-    // TODO: consider that Input variables are readonly!
-	
-    // NOTE: find all OpVariables   
+    
+    // NOTE: find all OpVariables and their data types
     {
-	    struct instruction_list *instruction = file->pre_cfg;
-	    while (instruction) {
-		if (instruction->data.opcode == OpVariable) {
-		    variable_instructions[variables.head] = instruction;
-		    variable_blocks[variables.head] = NULL;
-		    vector_push(&variables, instruction->data.OpVariable.result_id);
-		}
-                instruction = instruction->next;
-	    }
+        struct instruction_list *instruction = file->pre_cfg;
+        while (instruction) {
+            if (instruction->data.opcode == OpVariable) {
+                variable_instructions[variables.head] = instruction;
+                variable_blocks[variables.head] = NULL;
+                variable_types[variables.head] = get_variable_type(file, instruction->data.OpVariable.result_type);
+                vector_push(&variables, instruction->data.OpVariable.result_id);
+            }
+            instruction = instruction->next;
+        }
     }
-
+    
     for (u32 i = 0; i < file->cfg.labels.size; ++i) {
         struct basic_block *block = file->blocks + i;
         struct instruction_list *instruction = block->instructions;
@@ -282,6 +329,7 @@ ssa_convert(struct ir *file)
                 reading = true;
                 variable_instructions[variables.head] = instruction;
                 variable_blocks[variables.head] = file->blocks + i;
+                variable_types[variables.head] = get_variable_type(file, instruction->data.OpVariable.result_type);
                 vector_push(&variables, instruction->data.OpVariable.result_id);
             } else if (reading) {
                 // NOTE: we've read all OpVariables. 
@@ -340,14 +388,14 @@ ssa_convert(struct ir *file)
                 };
                 
                 phi.OpPhi.result_id = file->header.bound++;
-                phi.OpPhi.result_type = TYPE_INT; //TODO: actual type variable.OpVariable.result_type;
+                phi.OpPhi.result_type = variable_types[var_index];
                 phi.OpPhi.variables = malloc(pred_count * sizeof(u32));
                 phi.OpPhi.parents = malloc(pred_count * sizeof(u32));
                 
                 // NOTE: remember which variable this phi function resolves
                 vector_push(phi_functions + var_index, phi.OpPhi.result_id);
                 
-		// NOTE: insert OpStore to later be replaced with OpCopyObject
+                // NOTE: insert OpStore to later be replaced with OpCopyObject
                 struct instruction_t store = {
                     .opcode = OpStore,
                     .wordcount = 3
@@ -376,7 +424,7 @@ ssa_convert(struct ir *file)
     
     for (u32 var_index = 0; var_index < variables.size; ++var_index) {
         struct instruction_t original_variable = variable_instructions[var_index]->data;
-        ssa_traverse(file, &versions, 0, &original_variable, mapping + var_index, 
+        ssa_traverse(file, &versions, 0, variable_types[var_index], &original_variable, mapping + var_index, 
                      phi_functions + var_index, var_index, 0);
         ssa_delete_variable(file, original_variable.OpVariable.result_id, 
                             variable_blocks[var_index], variable_instructions[var_index]);

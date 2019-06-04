@@ -79,6 +79,12 @@ instruction_parse(u32 *word)
             }
         } break;
         
+        case OpTypePointer: {
+            instruction.OpTypePointer.result_id = *(word++);
+            instruction.OpTypePointer.storage_class = *(word++);
+            instruction.OpTypePointer.type = *(word++);
+        } break;
+        
         case OpBranch: {
             instruction.OpBranch.target_label = *(word++);
         } break;
@@ -160,6 +166,10 @@ instruction_parse(u32 *word)
             instruction.binary_arithmetics.operand_1 = *(word++);
             instruction.binary_arithmetics.operand_2 = *(word++);
         } break;
+        
+        default: {
+            // NOTE: nothing happens, we already wrote to unparsed words
+        };
     }
     
     return(instruction);
@@ -190,6 +200,12 @@ instruction_dump(struct instruction_t *inst, u32 *buffer)
             if (inst->wordcount == 5) {
                 buffer[4] = inst->OpVariable.result_type;
             }
+        } break;
+        
+        case OpTypePointer: {
+            buffer[1] = inst->OpTypePointer.result_id;
+            buffer[2] = inst->OpTypePointer.storage_class;
+            buffer[3] = inst->OpTypePointer.type;
         } break;
         
         case OpBranch: {
@@ -316,9 +332,12 @@ produces_result_id(enum opcode_t opcode)
         case OpStore: {
             return(false);
         }
+        
+        default: {
+            SHOULDNOTHAPPEN;
+        };
     }
     
-    SHOULDNOTHAPPEN;
 }
 
 static u32

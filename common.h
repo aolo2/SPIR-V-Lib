@@ -25,7 +25,7 @@ typedef double f64;
 
 #define ASSERT(expr) {\
     if (!(expr)) {\
-        fprintf(stderr, "\n[ASSERT] %s:%d\n\n", __FILE__, __LINE__);\
+        fprintf(stderr, "[ASSERT] %s:%d\n", __FILE__, __LINE__);\
         exit(1);\
     }\
 }

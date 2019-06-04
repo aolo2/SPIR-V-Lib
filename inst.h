@@ -8,6 +8,7 @@ enum opcode_t {
     OpName = 5,
     OpString = 7,          // enum only, is not parsed
     OpExecutionMode = 16,  // enum only, is not parsed
+    OpTypePointer = 32,
     OpVariable = 59,
     OpLoad = 61,
     OpStore = 62,
@@ -51,6 +52,12 @@ struct opvariable_t {
     u32 result_id;
     u32 storage_class;
     u32 initializer; // optional
+};
+
+struct optypepointer_t {
+    u32 result_id;
+    u32 storage_class;
+    u32 type;
 };
 
 struct opbranch_t {
@@ -123,6 +130,7 @@ struct instruction_t {
         struct opname_t OpName;
         struct oplabel_t OpLabel;
         struct opvariable_t OpVariable;
+        struct optypepointer_t OpTypePointer;
         struct opbranch_t OpBranch;
         struct opbranchconditional_t OpBranchConditional;
         struct opphi_t OpPhi;
