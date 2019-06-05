@@ -219,12 +219,33 @@ process_loop(struct ir *file, u32 header_block, u32 merge_block)
             edge = edge->next;
         }
         
+        // NOTE: redirect all incoming edges to preheader and correct OpPhi operands
         for (u32 i = 0; i < header_incoming.size; ++i) {
             cfg_redirect_edge(&file->cfg, header_incoming.data[i], header_index, preheader_index);
+            
+            u32 from_label = file->cfg.labels.data[header_incoming.data[i]];
+            u32 preheader_label = file->cfg.labels.data[preheader_index];
+            struct instruction_list *header_instructions = file->blocks[header_block].instructions;
+            
+            while (header_instructions) {
+                if (header_instructions->data.opcode == OpPhi) {
+                    u32 phi_parents_count = (header_instructions->data.wordcount - 3) / 2;
+                    for (u32 phi_parent = 0; phi_parent < phi_parents_count; ++phi_parent) {
+                        if (header_instructions->data.OpPhi.parents[phi_parent] == from_label) {
+                            header_instructions->data.OpPhi.parents[phi_parent] = preheader_label;
+                        }
+                    }
+                } else {
+                    // NOTE: there are no more OpPhi's. That's defined by the SPIR-V specification
+                    break;
+                }
+                header_instructions = header_instructions->next;
+            }
         }
         
         // NOTE: make an edge from preheader to header
         cfg_add_edge(&file->cfg, preheader_index, header_index);
+        
     }
     
     vector_free(&invariant_operands);
