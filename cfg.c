@@ -189,23 +189,23 @@ void
 cfg_show(struct ir_cfg *cfg) 
 {
     for (u32 i = 0; i < cfg->labels.size; ++i) {
-        if (cfg->labels.data[i]) {
-            printf("Vertex %d\n", cfg->labels.data[i]);
-            struct edge_list *edge = cfg->out[i];
-            printf("out:");
-            while (edge) {
-                printf(" []->%d", cfg->labels.data[edge->data]);
-                edge = edge->next;
-            }
-            
-            edge = cfg->in[i];
-            printf("\nin:");
-            while (edge) {
-                printf(" %d->[]", cfg->labels.data[edge->data]);
-                edge = edge->next;
-            }
-            printf("\n\n");
+        //if (cfg->labels.data[i]) {
+        printf("Vertex %d\n", cfg->labels.data[i]);
+        struct edge_list *edge = cfg->out[i];
+        printf("out:");
+        while (edge) {
+            printf(" []->%d", cfg->labels.data[edge->data]);
+            edge = edge->next;
         }
+        
+        edge = cfg->in[i];
+        printf("\nin:");
+        while (edge) {
+            printf(" %d->[]", cfg->labels.data[edge->data]);
+            edge = edge->next;
+        }
+        printf("\n\n");
+        //}
     }
 }
 

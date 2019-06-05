@@ -142,6 +142,18 @@ ir_eat(u32 *data, u32 size)
 void
 ir_dump(struct ir *file, const char *filename)
 {
+    struct cfg_dfs_result dfs = cfg_dfs(&file->cfg);
+    file->cfg.dominators = cfg_dominators(&file->cfg, &dfs);
+    
+    struct ir_cfg dominator_graph = cfg_init(file->cfg.labels.data, file->cfg.labels.size);
+    for (u32 i = 1; i < file->cfg.labels.size; ++i) {
+        cfg_add_edge(&dominator_graph, file->cfg.dominators[i], i);
+    }
+    
+    //cfg_show(&dominator_graph);
+    
+    struct uint_vector dom_bfs = cfg_bfs_order(&dominator_graph);
+    
     FILE *stream = fopen(filename, "wb");
     u32 buffer[256];
     
@@ -161,14 +173,21 @@ ir_dump(struct ir *file, const char *filename)
         inst = inst->next;
     } while (inst);
     
+    // TODO: traverse blocks by a BFS of a dominator tree. This
+    // way the validation rule 'The order of blocks in a function 
+    // must satisfy the rule that blocks appear before all blocks 
+    // they dominate' is fulfilled
     for (u32 i = 0; i < file->cfg.labels.size; ++i) {
-        if (file->cfg.labels.data[i] == 0) {
+        u32 block_index = dom_bfs.data[i];
+        if (file->cfg.labels.data[block_index] == 0) {
             continue;
         }
         
-        struct basic_block block = file->blocks[i];
+        printf("%d\n", file->cfg.labels.data[block_index]);
+        
+        struct basic_block block = file->blocks[block_index];
         struct oplabel_t label_operand = {
-            .result_id = file->cfg.labels.data[i]
+            .result_id = file->cfg.labels.data[block_index]
         };
         
         struct instruction_t label_inst = {
@@ -188,7 +207,7 @@ ir_dump(struct ir *file, const char *filename)
         }
         
         struct instruction_t termination_inst;
-        struct edge_list *edge = file->cfg.out[i];
+        struct edge_list *edge = file->cfg.out[block_index];
         u32 edge_count = 0;
         
         while (edge) {
@@ -202,15 +221,15 @@ ir_dump(struct ir *file, const char *filename)
         } else if (edge_count == 1) {
             termination_inst.opcode = OpBranch;
             termination_inst.wordcount = 2;
-            termination_inst.OpBranch.target_label = file->cfg.labels.data[file->cfg.out[i]->data];
+            termination_inst.OpBranch.target_label = file->cfg.labels.data[file->cfg.out[block_index]->data];
         } else if (edge_count == 2) {
             termination_inst.opcode = OpBranchConditional;
             termination_inst.wordcount = 4;
-            termination_inst.OpBranchConditional.condition = file->cfg.conditions[i];
+            termination_inst.OpBranchConditional.condition = file->cfg.conditions[block_index];
             termination_inst.OpBranchConditional.true_label =
-                file->cfg.labels.data[file->cfg.out[i]->data];
+                file->cfg.labels.data[file->cfg.out[block_index]->data];
             termination_inst.OpBranchConditional.false_label =
-                file->cfg.labels.data[file->cfg.out[i]->next->data];
+                file->cfg.labels.data[file->cfg.out[block_index]->next->data];
         } else {
             ASSERT(false);
         }
