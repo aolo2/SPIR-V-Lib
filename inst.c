@@ -324,6 +324,7 @@ produces_result_id(enum opcode_t opcode)
             return(true);
         }
         
+        case OpSLessThan:
         case OpLoopMerge:
         case OpSelectionMerge:
         case OpBranch:

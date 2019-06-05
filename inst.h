@@ -29,6 +29,33 @@ enum opcode_t {
     OpSMod = 139,
     OpFRem = 140,
     OpFMod = 141,
+    
+    /* Enum only */
+    OpIEqual = 170,
+    OpINotEqual = 171,
+    OpUGreaterThan = 172,
+    OpSGreaterThan = 173,
+    OpUGreaterThanEqual = 174,
+    OpSGreaterThanEqual = 175,
+    OpULessThan = 176,
+    OpSLessThan = 177,
+    OpULessThanEqual = 178,
+    OpSLessThanEqual = 179,
+    OpFOrdEqual = 180,
+    OpFUnordEqual = 181,
+    OpFOrdNotEqual = 182,
+    OpFUnordNotEqual = 183,
+    OpFOrdLessThan = 184,
+    OpFUnordLessThan = 185,
+    OpFOrdGreaterThan = 186,
+    OpFUnordGreaterThan = 187,
+    OpFOrdLessThanEqual = 188,
+    OpFUnordLessThanEqual = 189 ,
+    OpFOrdGreaterThanEqual = 190,
+    OpFUnordGreaterThanEqual = 191,
+    
+    /*************/
+    
     OpPhi = 245,
     OpLoopMerge = 246,
     OpSelectionMerge = 247,
