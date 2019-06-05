@@ -173,7 +173,7 @@ ir_dump(struct ir *file, const char *filename)
         inst = inst->next;
     } while (inst);
     
-    // TODO: traverse blocks by a BFS of a dominator tree. This
+    // NOTE: traverse blocks by a BFS of a dominator tree. This
     // way the validation rule 'The order of blocks in a function 
     // must satisfy the rule that blocks appear before all blocks 
     // they dominate' is fulfilled
@@ -182,8 +182,6 @@ ir_dump(struct ir *file, const char *filename)
         if (file->cfg.labels.data[block_index] == 0) {
             continue;
         }
-        
-        printf("%d\n", file->cfg.labels.data[block_index]);
         
         struct basic_block block = file->blocks[block_index];
         struct oplabel_t label_operand = {

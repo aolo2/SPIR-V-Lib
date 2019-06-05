@@ -178,7 +178,9 @@ ssa_traverse(struct ir *file, struct int_stack *versions, u32 counter, u32 data_
             if (inst->data.OpLoad.pointer == variable) {
                 if (original_variable->OpVariable.storage_class == 1 && versions->size == 0) {
                     // NOTE: if this is the FIRST OpLoad of an Input class variable in the entry block
-                    // then preserve the instruction
+                    // then move the instruction to the entry block
+                    ir_prepend_instruction(file->blocks + 0, inst->data);
+                    ir_delete_instruction(file->blocks + block_index, inst);
                 } else {
                     inst->data.opcode = OpCopyObject;
                     inst->data.wordcount = 4;
