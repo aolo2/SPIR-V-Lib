@@ -32,7 +32,6 @@ main(void)
     u32 *words = get_binary("data/sample.frag.spv", &num_words);
     struct ir file = ir_eat(words, num_words);
     
-    // NOTE: for any OpVariable there is only ONE OpStore (and maybe one OpLoad)
     ssa_convert(&file);
     
     ir_dump(&file, "../thesis/shaders/sample.frag.spv");

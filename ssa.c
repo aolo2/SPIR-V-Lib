@@ -157,28 +157,28 @@ ssa_traverse(struct ir *file, struct int_stack *versions, u32 counter, u32 data_
              struct instruction_t *original_variable, struct uint_vector *mapping,
              struct uint_vector *phi_functions, u32 var_index, u32 block_index)
 {
-    u32 edge_count = 0;
     u32 variable = original_variable->OpVariable.result_id;
-    bool is_termination_block = false;
-    bool first_load = true;
     struct instruction_list *inst = file->blocks[block_index].instructions;
-    struct edge_list *edge = file->cfg.out[block_index];
     
-    while (edge) {
-        ++edge_count;
-        edge = edge->next;
+    
+    u32 out_edge_count = 0;
+    struct edge_list *out_edge = file->cfg.out[block_index];
+    bool is_termination_block = false;
+    
+    while (out_edge) {
+        ++out_edge_count;
+        out_edge = out_edge->next;
     }
     
-    is_termination_block = (edge_count == 0);
+    is_termination_block = (out_edge_count == 0);
     
     while (inst) {
         // NOTE: use of variable
         if (inst->data.opcode == OpLoad) {
             if (inst->data.OpLoad.pointer == variable) {
-                if (block_index == 0 && original_variable->OpVariable.storage_class == 1 && first_load) {
+                if (original_variable->OpVariable.storage_class == 1 && versions->size == 0) {
                     // NOTE: if this is the FIRST OpLoad of an Input class variable in the entry block
                     // then preserve the instruction
-                    first_load = false;
                 } else {
                     inst->data.opcode = OpCopyObject;
                     inst->data.wordcount = 4;
@@ -367,7 +367,13 @@ ssa_convert(struct ir *file)
         phi_functions[var_index] = vector_init();
     }
     
-    // NOTE: insert phi functions
+    // NOTE: insert phi functions. Delay inserting phi's, as there could be multiple OpPhi's
+    // and they all have to be first instructions of the block. So we prepend all the OpStore's first
+    // and only then prepend all OpPhi's
+    struct instruction_t phi_queue[100];
+    u32 phi_blocks[100];
+    u32 delayed_phis = 0;
+    
     for (u32 var_index = 0; var_index < variables.size; ++var_index) {
         struct instruction_t variable = variable_instructions[var_index]->data;
         if (store_blocks[var_index].size > 1) {
@@ -405,9 +411,16 @@ ssa_convert(struct ir *file)
                 store.OpStore.object = phi.OpPhi.result_id;
                 
                 ir_prepend_instruction(file->blocks + soldier, store);
-                ir_prepend_instruction(file->blocks + soldier, phi);
+                
+                phi_blocks[delayed_phis] = soldier;
+                phi_queue[delayed_phis] = phi;
+                ++delayed_phis;
             }
         }
+    }
+    
+    for (u32 i = 0; i < delayed_phis; ++i) {
+        ir_prepend_instruction(file->blocks + phi_blocks[i], phi_queue[i]);
     }
     
     // NOTE: insert/rename SSA variables
@@ -424,6 +437,7 @@ ssa_convert(struct ir *file)
     
     for (u32 var_index = 0; var_index < variables.size; ++var_index) {
         struct instruction_t original_variable = variable_instructions[var_index]->data;
+        stack_clear(&versions);
         ssa_traverse(file, &versions, 0, variable_types[var_index], &original_variable, mapping + var_index, 
                      phi_functions + var_index, var_index, 0);
         ssa_delete_variable(file, original_variable.OpVariable.result_id, 
